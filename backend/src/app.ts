@@ -26,7 +26,7 @@ export function createApp(db: Pool) {
   });
 
   app.get("/health", (req, res) => {
-    res.json({ status: "ok" });
+    res.json({ status: true });
   });
 
   app.get("/tasks", async (req, res) => {
