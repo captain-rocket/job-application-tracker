@@ -5,6 +5,26 @@ export function createApp(db: Pool) {
   const app = express();
   app.use(express.json());
 
+  function requireDevKey(
+    req: express.Request,
+    res: express.Response,
+    next: express.NextFunction,
+  ) {
+    const expected = process.env.DEV_KEY;
+    if (!expected)
+      return res.status(500).json({ error: "DEV_KEY not configured" });
+
+    const provided = req.header("x-dev-key");
+    if (provided !== expected)
+      return res.status(400).json({ error: "Unauthorized" });
+
+    next();
+  }
+
+  app.get("/private", requireDevKey, (req, res) => {
+    res.json({ ok: true, message: "You reached a protected route" });
+  });
+
   app.get("/health", (req, res) => {
     res.json({ status: "ok" });
   });
@@ -39,12 +59,12 @@ export function createApp(db: Pool) {
 
   app.patch("/tasks/:id", async (req, res) => {
     const id = Number.parseInt(req.params.id, 10);
-    if (Number.isNaN(id)) return res.status(400).json({ error: "invalid id" });
+    if (Number.isNaN(id)) return res.status(400).json({ error: "Invalid id" });
 
     const hasTitle = typeof req.body?.title == "string";
     const hasCompleted = typeof req.body?.completed === "boolean";
     if (!hasTitle && !hasCompleted) {
-      return res.status(400).json({ error: "provide title and/or completed" });
+      return res.status(400).json({ error: "Provide title and/or completed" });
     }
 
     const title = hasTitle ? req.body?.title.trim() : undefined;
@@ -68,7 +88,7 @@ export function createApp(db: Pool) {
         ],
       );
       if (result.rowCount === 0)
-        return res.status(404).json({ error: "task not found" });
+        return res.status(404).json({ error: "Task not found" });
 
       res.json({ task: result.rows[0] });
     } catch (error) {
@@ -79,7 +99,7 @@ export function createApp(db: Pool) {
 
   app.delete("/tasks/:id", async (req, res) => {
     const id = Number.parseInt(req.params.id, 10);
-    if (Number.isNaN(id)) return res.status(400).json({ error: "invalid id" });
+    if (Number.isNaN(id)) return res.status(400).json({ error: "Invalid id" });
 
     try {
       const result = await db.query(

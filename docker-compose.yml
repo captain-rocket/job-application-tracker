@@ -1,7 +1,7 @@
 services:
-  db: 
+  db:
     image: postgres:16-alpine
-    environment: 
+    environment:
       POSTGRES_USER: app
       POSTGRES_PASSWORD: app
       POSTGRES_DB: app
@@ -20,6 +20,7 @@ services:
       DB_USER: app
       DB_PASSWORD: app
       DB_NAME: app
+      DEV_KEY: dev-secret
     ports:
       - "4000:4000"
     depends_on:
