@@ -13,14 +13,16 @@ services:
   api:
     build:
       context: ./backend
+    env_file:
+      - ./backend/.env
     environment:
-      PORT: 4000
       DB_HOST: db
       DB_PORT: 5432
       DB_USER: app
       DB_PASSWORD: app
       DB_NAME: app
       DEV_KEY: dev-secret
+      PORT: 4000
     ports:
       - "4000:4000"
     depends_on:
