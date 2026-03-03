@@ -6,7 +6,7 @@ import { requireAuth } from "../middleware/requireAuth";
 
 function signToken(user: { id: string; role: "user" | "admin" }) {
   const secret = process.env.JWT_SECRET;
-  if (!secret) throw new Error("JWT no confiured");
+  if (!secret) throw new Error("JWT not configured");
 
   return jwt.sign({ sub: user.id, role: user.role }, secret, {
     expiresIn: "1hr",

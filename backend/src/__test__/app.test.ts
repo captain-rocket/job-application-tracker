@@ -115,3 +115,78 @@ describe("API routes", () => {
     expect(res.status).toBe(401);
   });
 });
+
+describe("Auth routes", () => {
+  beforeAll(() => {
+    process.env.JWT_SECRET = "test-jwt-secret";
+  });
+
+  test("POST /auth/register success", async () => {
+    const db: Dblike = {
+      query: async (sql, params) => {
+        if (sql.toLowerCase().includes("select id from users")) {
+          return { rows: [], rowCount: 0 };
+        }
+        if (sql.toLowerCase().includes("insert into users")) {
+          return {
+            rows: [
+              {
+                id: "user-1",
+                email: "me@example.com",
+                role: "user",
+                created_at: new Date().toISOString(),
+              },
+            ],
+          };
+        }
+        throw new Error("Unexpected query");
+      },
+    };
+
+    const app = createApp(db as any);
+
+    const res = await request(app)
+      .post("/auth/register")
+      .send({ email: "me@example.com", password: "password123" });
+
+    expect(res.status).toBe(201);
+    expect(res.body.user.email).toBe("me@example.com");
+    expect(res.body.token).toBeDefined();
+  });
+
+  test("POST /auth/login wrong password", async () => {
+    const bcrypt = require("bcryptjs");
+    const hash = await bcrypt.hash("correctpassword", 10);
+
+    const db: Dblike = {
+      query: async () => ({
+        rows: [
+          {
+            id: "user-1",
+            email: "me@example.com",
+            password_hash: hash,
+            role: "user",
+          },
+        ],
+        rowCount: 1,
+      }),
+    };
+
+    const app = createApp(db as any);
+
+    const res = await request(app)
+      .post("/auth/login")
+      .send({ email: "me@example.com", password: "wrongpassord" });
+
+    expect(res.status).toBe(401);
+  });
+
+  test("GET /auth/me requires token", async () => {
+    const db: Dblike = { query: async () => ({ rows: [] }) };
+    const app = createApp(db as any);
+
+    const res = await request(app).get("/auth/me");
+
+    expect(res.status).toBe(401);
+  });
+});
