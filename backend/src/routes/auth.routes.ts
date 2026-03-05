@@ -16,7 +16,7 @@ function signToken(user: { id: string; role: "user" | "admin" }) {
 export function authRoutes(db: Pool) {
   const router = Router();
 
-  router.post("/auth/register", async (req, res) => {
+  router.post("/auth/register", async (req, res, next) => {
     const email =
       typeof req.body?.email === "string"
         ? req.body.email.trim().toLowerCase()
@@ -67,12 +67,11 @@ export function authRoutes(db: Pool) {
         token,
       });
     } catch (error) {
-      console.error(error);
-      res.status(500).json("registration failed");
+      next(error);
     }
   });
 
-  router.post("/auth/login", async (req, res) => {
+  router.post("/auth/login", async (req, res, next) => {
     const email =
       typeof req.body?.email === "string"
         ? req.body.email.trim().toLowerCase()
@@ -113,12 +112,11 @@ export function authRoutes(db: Pool) {
         token,
       });
     } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: "login failed" });
+      next(error);
     }
   });
 
-  router.get("/auth/me", requireAuth, async (req, res) => {
+  router.get("/auth/me", requireAuth, async (req, res, next) => {
     try {
       const me = await db.query(
         "SELECT id, email, role, created_at FROM users WHERE id = $1",
@@ -130,8 +128,7 @@ export function authRoutes(db: Pool) {
 
       res.json({ user: me.rows[0] });
     } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: "failed to load user" });
+      next(error);
     }
   });
   return router;

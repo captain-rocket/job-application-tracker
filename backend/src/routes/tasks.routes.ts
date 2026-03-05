@@ -7,7 +7,7 @@ export function tasksRoutes(db: Pool) {
 
   router.use(requireAuth);
 
-  router.get("/tasks", async (req, res) => {
+  router.get("/tasks", async (req, res, next) => {
     try {
       const result = await db.query(
         "SELECT id, title, completed, created_at FROM tasks WHERE user_id = $1 ORDER BY id DESC",
@@ -15,12 +15,11 @@ export function tasksRoutes(db: Pool) {
       );
       res.json({ tasks: result.rows });
     } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: "Database query failed" });
+      next(error);
     }
   });
 
-  router.post("/tasks", async (req, res) => {
+  router.post("/tasks", async (req, res, next) => {
     const title =
       typeof req.body?.title === "string" ? req.body?.title.trim() : "";
     if (!title) return res.status(400).json({ error: "title is required" });
@@ -32,11 +31,11 @@ export function tasksRoutes(db: Pool) {
       );
       res.status(201).json({ task: result.rows[0] });
     } catch (error) {
-      res.status(500).json({ error: "Database insert failed" });
+      next(error);
     }
   });
 
-  router.patch("/tasks/:id", async (req, res) => {
+  router.patch("/tasks/:id", async (req, res, next) => {
     const id = Number.parseInt(req.params.id, 10);
     if (Number.isNaN(id)) return res.status(400).json({ error: "Invalid id" });
 
@@ -72,12 +71,11 @@ export function tasksRoutes(db: Pool) {
 
       res.json({ task: result.rows[0] });
     } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: "Database update failed" });
+      next(error);
     }
   });
 
-  router.delete("/tasks/:id", async (req, res) => {
+  router.delete("/tasks/:id", async (req, res, next) => {
     const id = Number.parseInt(req.params.id, 10);
     if (Number.isNaN(id)) return res.status(400).json({ error: "Invalid id" });
 
@@ -94,8 +92,7 @@ export function tasksRoutes(db: Pool) {
 
       res.json({ deleted: result.rows[0] });
     } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: "Database delete failed" });
+      next(error);
     }
   });
 
