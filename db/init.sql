@@ -22,7 +22,7 @@ CREATE TABLE tasks (
 
 CREATE INDEX idx_tasks_user_id ON tasks (user_id);
 
-CREATE INDEX idx_task_user_id_create_at ON tasks (user_id, created_at);
+CREATE INDEX idx_tasks_user_id_created_at ON tasks (user_id, created_at DESC);
 
 INSERT INTO
   users (email, password_hash, role)
