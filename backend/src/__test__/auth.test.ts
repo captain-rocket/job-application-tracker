@@ -1,14 +1,6 @@
-import request from "supertest";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { createApp } from "../app";
-
-type Dblike = {
-  query: (
-    sql: string,
-    params?: unknown[],
-  ) => Promise<{ rows: any[]; rowCount?: number }>;
-};
+import { createTestAppWithDb, makeTestRequest } from "./testUtils";
 
 describe("Auth routes", () => {
   beforeAll(() => {
@@ -16,40 +8,39 @@ describe("Auth routes", () => {
   });
 
   test("POST /auth/register creates a user and returns token", async () => {
-    const db: Dblike = {
-      query: async (sql, params) => {
-        const q = sql.toLowerCase();
+    const app = createTestAppWithDb(async (sql, params) => {
+      const q = sql.toLowerCase();
 
-        if (q.includes("select id from users where email")) {
-          expect(params).toEqual(["me@example.com"]);
-          return { rows: [], rowCount: 0 };
-        }
-        if (q.includes("insert into users")) {
-          expect(params?.[0]).toBe("me@example.com");
-          expect(typeof params?.[1]).toBe("string");
-          expect((params?.[1] as string).length).toBeGreaterThan(20);
+      if (q.includes("select id from users where email")) {
+        expect(params).toEqual(["me@example.com"]);
+        return { rows: [], rowCount: 0 };
+      }
+      if (q.includes("insert into users")) {
+        expect(params?.[0]).toBe("me@example.com");
+        expect(typeof params?.[1]).toBe("string");
+        expect((params?.[1] as string).length).toBeGreaterThan(20);
 
-          return {
-            rows: [
-              {
-                id: "user-1",
-                email: "me@example.com",
-                role: "user",
-                created_at: "2026-01-01T00:00:00Z",
-              },
-            ],
-            rowCount: 1,
-          };
-        }
-        throw new Error(`Unexpected SQL in register ${sql}`);
-      },
-    };
+        return {
+          rows: [
+            {
+              id: "user-1",
+              email: "me@example.com",
+              role: "user",
+              created_at: "2026-01-01T00:00:00Z",
+            },
+          ],
+          rowCount: 1,
+        };
+      }
+      throw new Error(`Unexpected SQL in register ${sql}`);
+    });
 
-    const app = createApp(db as any);
-
-    const res = await request(app)
-      .post("/auth/register")
-      .send({ email: "me@example.com", password: "password123" });
+    const res = await makeTestRequest({
+      app,
+      method: "post",
+      path: "/auth/register",
+      body: { email: "me@example.com", password: "password123" },
+    });
 
     expect(res.status).toBe(201);
     expect(res.body.user).toEqual({
@@ -65,20 +56,20 @@ describe("Auth routes", () => {
   });
 
   test("POST /auth/register returns 409 for duplicate email", async () => {
-    const db: Dblike = {
-      query: async (sql) => {
-        const q = sql.toLowerCase().replace(/\s+/g, " ").trim();
-        if (q.includes("from users") && q.includes("where email")) {
-          return { rows: [{ id: "existing" }], rowCount: 1 };
-        }
-        throw new Error(`Unexpected SQL in duplicate test: ${sql}`);
-      },
-    };
-    const app = createApp(db as any);
+    const app = createTestAppWithDb(async (sql) => {
+      const q = sql.toLowerCase().replace(/\s+/g, " ").trim();
+      if (q.includes("from users") && q.includes("where email")) {
+        return { rows: [{ id: "existing" }], rowCount: 1 };
+      }
+      throw new Error(`Unexpected SQL in duplicate test: ${sql}`);
+    });
 
-    const res = await request(app)
-      .post("/auth/register")
-      .send({ email: "me@example.com", password: "password123" });
+    const res = await makeTestRequest({
+      app,
+      method: "post",
+      path: "/auth/register",
+      body: { email: "me@example.com", password: "password123" },
+    });
 
     expect(res.status).toBe(409);
     expect(res.body).toEqual({ error: "email already in use" });
@@ -87,33 +78,32 @@ describe("Auth routes", () => {
   test("POST /auth/login returns token for valid credentials", async () => {
     const hash = await bcrypt.hash("password123", 10);
 
-    const db: Dblike = {
-      query: async (sql, params) => {
-        const q = sql.toLocaleLowerCase();
+    const app = createTestAppWithDb(async (sql, params) => {
+      const q = sql.toLowerCase();
 
-        if (q.includes("from users") && q.includes("where email")) {
-          expect(params).toEqual(["me@example.com"]);
-          return {
-            rows: [
-              {
-                id: "user-1",
-                email: "me@example.com",
-                password_hash: hash,
-                role: "user",
-              },
-            ],
-            rowCount: 1,
-          };
-        }
-        throw new Error(`Unexpected SQL in login test: ${sql}`);
-      },
-    };
+      if (q.includes("from users") && q.includes("where email")) {
+        expect(params).toEqual(["me@example.com"]);
+        return {
+          rows: [
+            {
+              id: "user-1",
+              email: "me@example.com",
+              password_hash: hash,
+              role: "user",
+            },
+          ],
+          rowCount: 1,
+        };
+      }
+      throw new Error(`Unexpected SQL in login test: ${sql}`);
+    });
 
-    const app = createApp(db as any);
-
-    const res = await request(app)
-      .post("/auth/login")
-      .send({ email: "me@example.com", password: "password123" });
+    const res = await makeTestRequest({
+      app,
+      method: "post",
+      path: "/auth/login",
+      body: { email: "me@example.com", password: "password123" },
+    });
 
     expect(res.status).toBe(200);
     expect(res.body.user).toEqual({
@@ -127,65 +117,56 @@ describe("Auth routes", () => {
   test("POST /auth/login returns 401 for wrong password", async () => {
     const hash = await bcrypt.hash("password123", 10);
 
-    const db: Dblike = {
-      query: async () => ({
-        rows: [
-          {
-            id: "user-1",
-            email: "me@example.com",
-            password_hash: hash,
-            role: "user",
-          },
-        ],
-        rowCount: 1,
-      }),
-    };
-    const app = createApp(db as any);
+    const app = createTestAppWithDb(async () => ({
+      rows: [
+        {
+          id: "user-1",
+          email: "me@example.com",
+          password_hash: hash,
+          role: "user",
+        },
+      ],
+      rowCount: 1,
+    }));
 
-    const res = await request(app)
-      .post("/auth/login")
-      .send({ email: "me@example.com", password: "wrong" });
+    const res = await makeTestRequest({
+      app,
+      method: "post",
+      path: "/auth/login",
+      body: { email: "me@example.com", password: "wrong" },
+    });
 
     expect(res.status).toBe(401);
   });
 
   test("GET /auth/me returns user for valid token", async () => {
-    const db: Dblike = {
-      query: async (sql, params) => {
-        const q = sql.toLocaleLowerCase();
-        if (
-          q.includes("select id, email, role, created_at from users where id")
-        ) {
-          expect(params).toEqual(["user-1"]);
-          return {
-            rows: [
-              {
-                id: "user-1",
-                email: "me@example.com",
-                role: "user",
-                created_at: "2026-01-01T00:00:00Z",
-              },
-            ],
-            rowCount: 1,
-          };
-        }
-        throw new Error(`Unexpected SQL in /me test: ${sql}`);
-      },
-    };
+    const app = createTestAppWithDb(async (sql, params) => {
+      const q = sql.toLowerCase();
+      if (
+        q.includes("select id, email, role, created_at from users where id")
+      ) {
+        expect(params).toEqual(["user-1"]);
+        return {
+          rows: [
+            {
+              id: "user-1",
+              email: "me@example.com",
+              role: "user",
+              created_at: "2026-01-01T00:00:00Z",
+            },
+          ],
+          rowCount: 1,
+        };
+      }
+      throw new Error(`Unexpected SQL in /me test: ${sql}`);
+    });
 
-    const app = createApp(db as any);
-
-    const token = jwt.sign(
-      { sub: "user-1", role: "user" },
-      process.env.JWT_SECRET!,
-      {
-        expiresIn: "5m",
-      },
-    );
-
-    const res = await request(app)
-      .get("/auth/me")
-      .set("Authorization", `Bearer ${token}`);
+    const res = await makeTestRequest({
+      app,
+      method: "get",
+      path: "/auth/me",
+      auth: { sub: "user-1", role: "user" },
+    });
 
     expect(res.status).toBe(200);
     expect(res.body.user.id).toBe("user-1");
@@ -193,11 +174,13 @@ describe("Auth routes", () => {
   });
 
   test("GET /auth/me returns 401 without token", async () => {
-    const db: Dblike = { query: async () => ({ rows: [], rowCount: 0 }) };
+    const app = createTestAppWithDb(async () => ({ rows: [], rowCount: 0 }));
 
-    const app = createApp(db as any);
-
-    const res = await request(app).get("/auth/me");
+    const res = await makeTestRequest({
+      app,
+      method: "get",
+      path: "/auth/me",
+    });
 
     expect(res.status).toBe(401);
   });
