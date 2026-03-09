@@ -4,11 +4,7 @@ import {
   makeTestRequest,
 } from "./testUtils";
 
-describe("API routes", () => {
-  beforeAll(() => {
-    process.env.JWT_SECRET = "test-jwt-secret";
-  });
-
+describe("Task routes", () => {
   test("GET /health returns status: true", async () => {
     const app = createTestAppWithDb(async (sql, params) => ({ rows: [] }));
 
@@ -22,7 +18,7 @@ describe("API routes", () => {
     expect(res.body).toEqual({ status: true });
   });
 
-  test("GET /task returns tasks array from db (requires JWT)", async () => {
+  test("GET /tasks returns tasks array from db (requires JWT)", async () => {
     const fakeRows = [
       {
         id: 1,
@@ -81,7 +77,7 @@ describe("API routes", () => {
     expect(res.body).toEqual({ task: created });
   });
 
-  test("GET /tasks with out JWT returns 401", async () => {
+  test("GET /tasks without JWT returns 401", async () => {
     const app = createTestAppWithDb(async (sql, params) => ({ rows: [] }));
 
     const res = await makeTestRequest({
@@ -272,81 +268,5 @@ describe("API routes", () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ deleted });
-  });
-});
-
-describe("Auth routes", () => {
-  beforeAll(() => {
-    process.env.JWT_SECRET = "test-jwt-secret";
-  });
-
-  test("POST /auth/register success", async () => {
-    const app = createTestAppWithDb(async (sql, params) => {
-      if (sql.toLowerCase().includes("select id from users")) {
-        return { rows: [], rowCount: 0 };
-      }
-      if (sql.toLowerCase().includes("insert into users")) {
-        return {
-          rows: [
-            {
-              id: "user-1",
-              email: "me@example.com",
-              role: "user",
-              created_at: new Date().toISOString(),
-            },
-          ],
-        };
-      }
-      throw new Error("Unexpected query");
-    });
-
-    const res = await makeTestRequest({
-      app,
-      method: "post",
-      path: "/auth/register",
-      body: { email: "me@example.com", password: "password123" },
-    });
-
-    expect(res.status).toBe(201);
-    expect(res.body.user.email).toBe("me@example.com");
-    expect(res.body.token).toBeDefined();
-  });
-
-  test("POST /auth/login wrong password", async () => {
-    const bcrypt = require("bcryptjs");
-    const hash = await bcrypt.hash("correctpassword", 10);
-
-    const app = createTestAppWithDb(async (sql, params) => ({
-      rows: [
-        {
-          id: "user-1",
-          email: "me@example.com",
-          password_hash: hash,
-          role: "user",
-        },
-      ],
-      rowCount: 1,
-    }));
-
-    const res = await makeTestRequest({
-      app,
-      method: "post",
-      path: "/auth/login",
-      body: { email: "me@example.com", password: "wrongpassord" },
-    });
-
-    expect(res.status).toBe(401);
-  });
-
-  test("GET /auth/me requires token", async () => {
-    const app = createTestAppWithDb(async (sql, params) => ({ rows: [] }));
-
-    const res = await makeTestRequest({
-      app,
-      method: "get",
-      path: "/auth/me",
-    });
-
-    expect(res.status).toBe(401);
   });
 });

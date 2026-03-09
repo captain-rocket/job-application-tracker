@@ -3,9 +3,6 @@ import jwt from "jsonwebtoken";
 import { createTestAppWithDb, makeTestRequest } from "./testUtils";
 
 describe("Auth routes", () => {
-  beforeAll(() => {
-    process.env.JWT_SECRET = "test-jwt-secret";
-  });
 
   test("POST /auth/register creates a user and returns token", async () => {
     const app = createTestAppWithDb(async (sql, params) => {

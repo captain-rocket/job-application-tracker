@@ -1,9 +1,6 @@
 import { createTestAppWithDb, makeTestRequest } from "./testUtils";
 
 describe("Admin routes", () => {
-  beforeAll(() => {
-    process.env.JWT_SECRET = "test-jwt-secret";
-  });
 
   test("Get /admin/users returns 403 for non-admin", async () => {
     const app = createTestAppWithDb(async () => ({ rows: [] }));

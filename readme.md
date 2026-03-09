@@ -30,7 +30,6 @@ Current implementation includes:
 - Dockerized Node/Express API
 - One relational table (`tasks`)
 - Full CRUD routes
-- Protected route stub
 - Jest route tests
 
 ---
@@ -106,18 +105,6 @@ Deletes a task.
 
 ---
 
-### Protected Route (Week 1 Stub)
-
-GET `/private`
-
-Requires header:
-
-    x-dev-key: dev-secret
-
-This is a temporary protection mechanism.  
-JWT authentication will replace this in Week 2.
-
----
 
 ## Running Tests
 

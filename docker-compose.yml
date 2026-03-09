@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     environment:
       POSTGRES_USER: app
       POSTGRES_PASSWORD: app
@@ -21,7 +21,7 @@ services:
       DB_USER: app
       DB_PASSWORD: app
       DB_NAME: app
-      DEV_KEY: dev-secret
+      JWT_SECRET: dev-secret
       PORT: 4000
     ports:
       - "4000:4000"

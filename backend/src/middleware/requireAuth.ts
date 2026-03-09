@@ -1,3 +1,4 @@
+import { getAuthEnv } from "../config/env";
 import { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 
@@ -7,9 +8,14 @@ type JwtPayload = {
 };
 
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
-  const secret = process.env.JWT_SECRET;
-  if (!secret)
+  
+  let jwtSecret: string;
+  try {
+    jwtSecret = getAuthEnv().jwtSecret
+  } catch (error) {
+    
     return res.status(500).json({ error: "JWT_SECRET not configured" });
+  }
 
   const header = req.get("authorization") || "";
   const [scheme, token] = header.split(" ");
@@ -19,7 +25,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
   }
 
   try {
-    const decoded = jwt.verify(token, secret) as JwtPayload;
+    const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
 
     if (!decoded?.sub || !decoded?.role) {
       return res.status(401).json({ error: "Invalid token payload" });

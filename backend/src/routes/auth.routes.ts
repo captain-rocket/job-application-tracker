@@ -1,3 +1,4 @@
+import { getAuthEnv } from "../config/env";
 import { Router } from "express";
 import { Pool } from "pg";
 import bcrypt from "bcryptjs";
@@ -5,10 +6,15 @@ import jwt from "jsonwebtoken";
 import { requireAuth } from "../middleware/requireAuth";
 
 function signToken(user: { id: string; role: "user" | "admin" }) {
-  const secret = process.env.JWT_SECRET;
-  if (!secret) throw new Error("JWT not configured");
+  
+  let jwtSecret: string;
+  try {
+    jwtSecret = getAuthEnv().jwtSecret
+  } catch (error) {
+    throw new Error("JWT not configured");
+  }
 
-  return jwt.sign({ sub: user.id, role: user.role }, secret, {
+  return jwt.sign({ sub: user.id, role: user.role }, jwtSecret, {
     expiresIn: "1hr",
   });
 }

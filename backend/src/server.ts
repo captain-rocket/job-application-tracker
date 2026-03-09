@@ -1,23 +1,24 @@
-import "dotenv/config";
+import { getServerEnv } from "./config/env";
 import { Pool } from "pg";
 import { createApp } from "./app";
 
-const PORT = Number(process.env.PORT ?? 4000);
+const { db, port } = getServerEnv();
 
-const db = new Pool({
-  host: process.env.DB_HOST,
-  port: Number(process.env.DB_PORT ?? 5432),
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
+const pool = new Pool({
+  database: db.database,
+  host: db.host,
+  password: db.password,
+  port: db.port,
+  user: db.user,
 });
 
-db.on("error", (err: Error) => {
+pool.on("error", (err: Error) => {
   console.error("Unexpected DB error", err);
 });
 
-const app = createApp(db);
+const app = createApp(pool);
 
-app.listen(PORT, () => {
-  console.log(`API listening on http://localhost:${PORT}`);
+
+app.listen(port, () => {
+  console.log(`API listening on http://localhost:${port}`);
 });

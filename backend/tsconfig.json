@@ -2,10 +2,15 @@
   "compilerOptions": {
     "target": "ES2021",
     "module": "CommonJS",
+    "moduleResolution": "node",
     "rootDir": "src",
     "outDir": "dist",
     "strict": true,
     "esModuleInterop": true,
-    "skipLibCheck": true
-  }
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "types": ["node", "jest"]
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "src/__test__", "**/*.test.ts", "**/*.test.tsx"]
 }

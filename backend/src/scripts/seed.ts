@@ -1,4 +1,4 @@
-import "dotenv/config";
+import { getDbEnv } from "../config/env";
 import bcrypt from "bcryptjs";
 import { Pool } from "pg";
 
@@ -14,28 +14,16 @@ import { Pool } from "pg";
  * - Insert a small set of tasks
  */
 
-type Env = {
-  DB_HOST: string;
-  DB_NAME: string;
-  DB_PASSWORD: string;
-  DB_PORT: string;
-  DB_USER: string;
-};
 
-function requireEnv(name: keyof Env): string {
-  const v = process.env[name];
-
-  if (!v) throw new Error(`Missing required env var: ${name}`);
-  return v;
-}
+const { database, host, password, port, user } = getDbEnv();
 
 async function main() {
   const pool = new Pool({
-    database: requireEnv("DB_NAME"),
-    host: requireEnv("DB_HOST"),
-    password: requireEnv("DB_PASSWORD"),
-    port: Number.parseInt(requireEnv("DB_PORT"), 10),
-    user: requireEnv("DB_USER"),
+    database: database,
+    host: host,
+    password: password,
+    port: port,
+    user: user,
   });
 
   const users = [
