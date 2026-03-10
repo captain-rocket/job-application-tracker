@@ -15,5 +15,5 @@ export function errorHandler(
 
   if (res.headersSent) return;
 
-  res.status(500).json({ error: "internal Server Error" });
+  res.status(500).json({ error: "Internal Server Error" });
 }

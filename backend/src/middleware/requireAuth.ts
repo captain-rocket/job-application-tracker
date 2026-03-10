@@ -34,6 +34,6 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
     req.user = { id: decoded.sub, role: decoded.role };
     next();
   } catch (error) {
-    return res.status(401).json({ error: "Invalid or expored token" });
+    return res.status(401).json({ error: "Invalid or expired token" });
   }
 }

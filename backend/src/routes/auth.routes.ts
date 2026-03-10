@@ -15,7 +15,7 @@ function signToken(user: { id: string; role: "user" | "admin" }) {
   }
 
   return jwt.sign({ sub: user.id, role: user.role }, jwtSecret, {
-    expiresIn: "1hr",
+    expiresIn: "1h",
   });
 }
 
