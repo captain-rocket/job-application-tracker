@@ -119,7 +119,7 @@ describe("Task routes", () => {
     expect(res.body).toEqual({ error: "title is required" });
   });
 
-  test("PATCH /tasks/id: returns 400 for invalid id", async () => {
+  test("PATCH /tasks/:id returns 400 for invalid id", async () => {
     const app = createAppExpectNoDbCalls("id.invalid");
 
     const res = await makeTestRequest({

@@ -2,6 +2,7 @@ import express from "express";
 
 import { Pool } from "pg";
 import { adminRoutes } from "./routes/admin.routes";
+import { applicationsRoutes } from "./routes/applications.routes";
 import { authRoutes } from "./routes/auth.routes";
 import { healthRoutes } from "./routes/health.routes";
 import { tasksRoutes } from "./routes/tasks.routes";
@@ -12,10 +13,12 @@ export function createApp(db: Pool) {
 
   app.use(express.json());
 
-  app.use(adminRoutes(db));
-  app.use(authRoutes(db));
   app.use(healthRoutes());
+  app.use(authRoutes(db));
+
   app.use(tasksRoutes(db));
+  app.use(applicationsRoutes(db));
+  app.use(adminRoutes(db));
 
   app.use(errorHandler);
 

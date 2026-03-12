@@ -1,7 +1,7 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
+DROP TABLE IF EXISTS applications;
 DROP TABLE IF EXISTS tasks;
-
 DROP TABLE IF EXISTS users;
 
 CREATE TABLE users (
@@ -15,14 +15,42 @@ CREATE TABLE users (
 CREATE TABLE tasks (
   id SERIAL PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-  TITLE TEXT NOT NULL,
-  COMPLETED BOOLEAN NOT NULL DEFAULT false,
+  title TEXT NOT NULL,
+  completed BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW ()
 );
 
 CREATE INDEX idx_tasks_user_id ON tasks (user_id);
-
 CREATE INDEX idx_tasks_user_id_created_at ON tasks (user_id, created_at DESC);
+
+CREATE TABLE applications (
+  id SERIAL PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  company TEXT NOT NULL,
+  job_title TEXT NOT NULL,
+
+  status TEXT NOT NULL DEFAULT 'saved'
+  CHECK (status IN (
+  'applied',
+  'interviewing',
+  'saved',
+  'offer',
+  'rejected',
+  'withdrawn'
+  )),
+
+  job_url TEXT,
+  location TEXT,
+  notes TEXT,
+
+  applied_at TIMESTAMPTZ,
+
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW (),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW ()
+);
+
+CREATE INDEX idx_applications_user_id_created_at ON applications (user_id, created_at DESC);
+CREATE INDEX idx_applications_user_id_status ON applications (user_id, status);
 
 INSERT INTO
   users (email, password_hash, role)
@@ -44,4 +72,4 @@ FROM
       ('Second task', true)
   ) AS v (title, completed) ON TRUE
 WHERE
-  u.email = 'user@example.com'
+  u.email = 'user@example.com';
