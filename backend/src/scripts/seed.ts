@@ -1,6 +1,5 @@
-import { getDbEnv, getDbSslConfig } from "../config/env";
 import bcrypt from "bcryptjs";
-import { Pool } from "pg";
+import { createDbPool } from "../config/db";
 
 /**
  * Seed script goals:
@@ -14,17 +13,8 @@ import { Pool } from "pg";
  * - Insert a small set of tasks
  */
 
-const { database, host, password, port, user } = getDbEnv();
-
 async function main() {
-  const pool = new Pool({
-    database: database,
-    host: host,
-    password: password,
-    port: port,
-    user: user,
-    ssl: getDbSslConfig(),
-  });
+  const pool = createDbPool();
 
   const users = [
     {

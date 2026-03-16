@@ -1,21 +1,10 @@
-import {
-  getServerEnv,
-  getDbSslConfig,
-  getRedactedStartupConfig,
-} from "./config/env";
-import { Pool } from "pg";
+import { getServerEnv, getRedactedStartupConfig } from "./config/env";
 import { createApp } from "./app";
+import { createDbPool } from "./config/db";
 
-const { db, port, nodeEnv } = getServerEnv();
+const { port, nodeEnv } = getServerEnv();
 
-const pool = new Pool({
-  database: db.database,
-  host: db.host,
-  password: db.password,
-  port: db.port,
-  user: db.user,
-  ssl: getDbSslConfig(),
-});
+const pool = createDbPool();
 
 pool.on("error", (err: Error) => {
   console.error("Unexpected DB error", err);
