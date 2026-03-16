@@ -1,8 +1,12 @@
-import { getServerEnv } from "./config/env";
+import {
+  getServerEnv,
+  getDbSslConfig,
+  getRedactedStartupConfig,
+} from "./config/env";
 import { Pool } from "pg";
 import { createApp } from "./app";
 
-const { db, port } = getServerEnv();
+const { db, port, nodeEnv } = getServerEnv();
 
 const pool = new Pool({
   database: db.database,
@@ -10,6 +14,7 @@ const pool = new Pool({
   password: db.password,
   port: db.port,
   user: db.user,
+  ssl: getDbSslConfig(),
 });
 
 pool.on("error", (err: Error) => {
@@ -18,7 +23,7 @@ pool.on("error", (err: Error) => {
 
 const app = createApp(pool);
 
-
 app.listen(port, () => {
-  console.log(`API listening on http://localhost:${port}`);
+  console.log("API startup config", getRedactedStartupConfig());
+  console.log(`API listening on port ${port} (${nodeEnv})`);
 });

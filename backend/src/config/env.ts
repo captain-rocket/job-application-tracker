@@ -2,46 +2,165 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-function getRequiredEnv(name:string): string {
+type NodeEnv = "development" | "test" | "production";
+
+function getNodeEnv(): NodeEnv {
+  const v = process.env.NODE_ENV?.trim();
+
+  if (!v) return "development";
+  if (v !== "development" && v !== "test" && v !== "production")
+    throw new Error(
+      "Environment variable NODE_ENV must be one of: development, test or production",
+    );
+  return v;
+}
+
+function getRequiredEnv(name: string): string {
   const v = process.env[name];
-  if (!v || v.trim() === "") throw new Error(`Missing required env var: ${name}`);
-  return v;   
+  if (!v || v.trim() === "")
+    throw new Error(`Missing required env var: ${name}`);
+  return v;
+}
+
+function getOptionalEnv(name: string): string | undefined {
+  const v = process.env[name];
+  if (!v || v.trim() === "") return undefined;
+
+  return v.trim();
 }
 
 function getNumberEnv(name: string, fallback?: number): number {
-  const value = process.env[name];
-  if (!value || value.trim() === "") {
-    if(fallback !== undefined){
-return fallback;
-    } 
+  const v = process.env[name];
+  if (!v || v.trim() === "") {
+    if (fallback !== undefined) {
+      return fallback;
+    }
     throw new Error(`Missing required env var: ${name}`);
-    
   }
-  const parsed = Number(value);
-  if (Number.isNaN(parsed)) throw new Error(`Environment variable ${name} must be a valid number`);
+  const parsed = Number(v);
+  if (Number.isNaN(parsed))
+    throw new Error(`Environment variable ${name} must be a valid number`);
   return parsed;
 }
 
+function getBooleanEnv(name: string, fallback = false): boolean {
+  const v = process.env[name];
+
+  if (!v || v.trim() === "") return fallback;
+
+  const normalized = v.trim().toLowerCase();
+
+  if (normalized === "true") return true;
+
+  if (normalized === "false") return false;
+
+  throw new Error(`Environment variable ${name} must be true or false`);
+}
+
+export function getAppEnv() {
+  const nodeEnv = getNodeEnv();
+
+  return {
+    nodeEnv,
+    isDevelopment: nodeEnv === "development",
+    isTest: nodeEnv === "test",
+    isProduction: nodeEnv === "production",
+  };
+}
+
+function validateJwtSecret(jwtSecret: string, isProduction: boolean) {
+  if (!isProduction) return;
+
+  const normalized = jwtSecret.trim().toLowerCase();
+
+  if (jwtSecret.length < 32)
+    throw new Error("JWT_SECRET must be at least 32 characters in production");
+
+  const blockSecrets = new Set([
+    "dev-secret",
+    "development-secret",
+    "change-me",
+    "changeme",
+    "password",
+    "secret",
+    "test-secret",
+  ]);
+  if (blockSecrets.has(normalized))
+    throw new Error("JWT_SECRET is not strong enough for production");
+}
+
 export function getDbEnv() {
+  const { isProduction } = getAppEnv();
+
+  const sslEnabled = getBooleanEnv("DB_SSL", isProduction);
+  const sslRejectUnauthorized = getBooleanEnv(
+    "DB_SSL_REJECT_UNAUTHORIZED",
+    true,
+  );
+
   return {
     host: getRequiredEnv("DB_HOST"),
     port: getNumberEnv("DB_PORT", 5432),
     user: getRequiredEnv("DB_USER"),
     password: getRequiredEnv("DB_PASSWORD"),
     database: getRequiredEnv("DB_NAME"),
+    sslEnabled,
+    sslRejectUnauthorized,
   };
 }
 
 export function getAuthEnv() {
+  const { isProduction } = getAppEnv();
+  const jwtSecret = getRequiredEnv("JWT_SECRET");
+
+  validateJwtSecret(jwtSecret, isProduction);
+
   return {
     jwtSecret: getRequiredEnv("JWT_SECRET"),
-  }
+  };
 }
 
-export function getServerEnv(){
+export function getServerEnv() {
+  const app = getAppEnv();
+  const port = getNumberEnv("PORT", 4000);
+  const db = getDbEnv();
+  const auth = getAuthEnv();
+
+  if (app.isProduction && port <= 0)
+    throw new Error("PORT must be a positive number");
+
   return {
-    port: getNumberEnv("PORT", 4000) ,
-    db: getDbEnv(),
-  }
+    nodeEnv: app.nodeEnv,
+    isDevelopment: app.isDevelopment,
+    isTest: app.isTest,
+    isProduction: app.isProduction,
+    port,
+    db,
+    auth,
+  };
 }
 
+export function getDbSslConfig() {
+  const db = getDbEnv();
+
+  if (!db.sslEnabled) return false;
+
+  return { rejectUnauthorized: db.sslRejectUnauthorized };
+}
+
+export function getRedactedStartupConfig() {
+  const { nodeEnv, port, db } = getServerEnv();
+
+  return {
+    nodeEnv,
+    port,
+    db: {
+      host: db.host,
+      port: db.port,
+      user: db.user,
+      database: db.database,
+      sslEnabled: db.sslEnabled,
+      sslRejectUnauthorized: db.sslRejectUnauthorized,
+    },
+  };
+}

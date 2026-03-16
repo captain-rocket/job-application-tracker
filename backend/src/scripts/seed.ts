@@ -1,4 +1,4 @@
-import { getDbEnv } from "../config/env";
+import { getDbEnv, getDbSslConfig } from "../config/env";
 import bcrypt from "bcryptjs";
 import { Pool } from "pg";
 
@@ -14,7 +14,6 @@ import { Pool } from "pg";
  * - Insert a small set of tasks
  */
 
-
 const { database, host, password, port, user } = getDbEnv();
 
 async function main() {
@@ -24,6 +23,7 @@ async function main() {
     password: password,
     port: port,
     user: user,
+    ssl: getDbSslConfig(),
   });
 
   const users = [

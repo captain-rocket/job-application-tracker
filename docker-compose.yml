@@ -16,11 +16,14 @@ services:
     env_file:
       - ./backend/.env
     environment:
+      NODE_ENV: development
       DB_HOST: db
       DB_PORT: 5432
       DB_USER: app
       DB_PASSWORD: app
       DB_NAME: app
+      DB_SSL: false
+      DB_SSL_REJECT_UNAUTHORIZED: true
       JWT_SECRET: dev-secret
       PORT: 4000
     ports:
