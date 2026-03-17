@@ -3,7 +3,7 @@
 ## Target Environment
 
 - AWS EC2 (Linux)
-- Docker Runtime
+- Docker runtime
 - PostgreSQL via AWS RDS
 
 ## Build
@@ -24,10 +24,10 @@ npm run docker:build
 
 ```bash
 docker run -d \
--p 4000:4000 \
---env-file ./backend/.env \
---name job-tracker-api \
-job-tracker-api
+  -p 4000:4000 \
+  --env-file ./backend/.env \
+  --name job-tracker-api \
+  job-tracker-api
 ```
 
 ## Required Environment Variables
@@ -41,7 +41,7 @@ DB_PASSWORD=
 DB_NAME=
 DB_SSL=true
 DB_SSL_REJECT_UNAUTHORIZED=true
-JWT_SECRET=
+JWT_SECRET=<at-least-32-character-secret>
 PORT=4000
 ```
 

@@ -142,11 +142,11 @@ docker compose up --build
 
 The API will be available at:
 
-http://localhost:4000
+<http://localhost:4000>
 
 Health check endpoint:
 
-GET http://localhost:4000/health
+GET <http://localhost:4000/health>
 
 Example backend environment variables:
 
@@ -160,7 +160,47 @@ JWT_SECRET=dev-secret
 PORT=4000
 ```
 
+note: In production, `JWT_SECRET` must be at least 32 characters and must not use weak/default values.
+
 For Docker Compose, the database connection values are supplied by `docker-compose.yml`, and `backend/.env` is primarily used to provide backend configuration such as `JWT_SECRET` when running outside Docker.
+
+---
+
+## Deployment
+
+This backend is designed to run as a Docker container on AWS EC2, with PostgreSQL on AWS RDS.
+
+### Build
+
+From repo root:
+
+```bash
+docker build -t job-tracker-api ./backend
+```
+
+### Run
+
+```bash
+docker run -d \
+   -p 4000:4000 \
+   --env-file ./backend/.env \
+   --name job-tracker-api \
+   job-tracker-api
+```
+
+### Configuration
+
+See:
+
+- `backend/.env.example` for required environment variables
+- `backend/DEPLOYMENT.md` for full deployment instructions
+- In production, `JWT_SECRET` must be at least 32 characters and not be a weak/default secret.
+
+### Notes
+
+- Production uses external PostgreSQL (RDS)
+- Docker Compose is not used in production
+- Secrets must be provided via environment variables
 
 ---
 
@@ -174,12 +214,12 @@ Default accounts:
 
 Admin user
 
-admin@example.com
+<admin@example.com>
 AdminPass123!
 
 Standard user
 
-user@example.com
+<user@example.com>
 UserPass123!
 
 These accounts allow testing authenticated and admin routes.
