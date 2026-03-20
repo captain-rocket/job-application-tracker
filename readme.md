@@ -81,7 +81,7 @@ job-application-tracker/
 │   └── workflows/
 │       └── backend-ci.yml
 ├── docker-compose.yml
-└── readme.md
+└── README.md
 ```
 
 ---
@@ -90,41 +90,63 @@ job-application-tracker/
 
 The database is initialized automatically via:
 
-db/init.sql
+`db/init.sql`
 
 Current tables:
 
-users
+### users
 
-id UUID PRIMARY KEY DEFAULT gen_random_uuid()
-email TEXT NOT NULL UNIQUE
-password_hash TEXT NOT NULL
-role TEXT NOT NULL DEFAULT 'user'
-CHECK (role IN ('user','admin'))
-created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+```sql
+CREATE TABLE users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
+  email TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW ()
+);
+```
 
-tasks
+### tasks
 
-id SERIAL PRIMARY KEY
-user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
-title TEXT NOT NULL
-completed BOOLEAN NOT NULL DEFAULT false
-created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+```sql
+CREATE TABLE tasks (
+  id SERIAL PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  completed BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW ()
+);
+```
 
-applications
+### applications
 
-id SERIAL PRIMARY KEY
-user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
-company TEXT NOT NULL
-job_title TEXT NOT NULL
-status TEXT NOT NULL
-CHECK (status IN ('saved','applied','interviewing','offer','rejected','withdrawn'))
-job_url TEXT
-location TEXT
-notes TEXT
-applied_at TIMESTAMPTZ
-created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+```sql
+CREATE TABLE applications (
+  id SERIAL PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  company TEXT NOT NULL,
+  job_title TEXT NOT NULL,
+
+  status TEXT NOT NULL DEFAULT 'saved'
+  CHECK (status IN (
+  'applied',
+  'interviewing',
+  'saved',
+  'offer',
+  'rejected',
+  'withdrawn'
+  )),
+
+  job_url TEXT,
+  location TEXT,
+  notes TEXT,
+
+  applied_at TIMESTAMPTZ,
+
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW (),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW ()
+);
+```
 
 ---
 
@@ -134,11 +156,15 @@ From the project root:
 
 1. Create a local environment file for the backend:
 
-      cp backend/.env.example backend/.env
+```bash
+cp backend/.env.example backend/.env
+```
 
-2. Start the services:
+1. Start the services:
 
+```bash
 docker compose up --build
+```
 
 The API will be available at:
 
@@ -151,16 +177,22 @@ GET <http://localhost:4000/health>
 Example backend environment variables:
 
 ```env
+NODE_ENV=development
+
 DB_HOST=localhost
 DB_PORT=5432
 DB_USER=app
 DB_PASSWORD=app
 DB_NAME=app
+DB_SSL=false
+DB_SSL_REJECT_UNAUTHORIZED=true
+
 JWT_SECRET=dev-secret
+
 PORT=4000
 ```
 
-note: In production, `JWT_SECRET` must be at least 32 characters and must not use weak/default values.
+Note: In production, `JWT_SECRET` must be at least 32 characters and must not use weak/default values.
 
 For Docker Compose, the database connection values are supplied by `docker-compose.yml`, and `backend/.env` is primarily used to provide backend configuration such as `JWT_SECRET` when running outside Docker.
 
@@ -184,6 +216,7 @@ docker build -t job-tracker-api ./backend
 docker run -d \
    -p 4000:4000 \
    --env-file ./backend/.env \
+   --restart unless-stopped \
    --name job-tracker-api \
    job-tracker-api
 ```
@@ -208,7 +241,9 @@ See:
 
 Development users can be created from the backend directory:
 
+```bash
 npm run seed
+```
 
 Default accounts:
 
@@ -316,7 +351,9 @@ Returns a list of users.
 
 From the backend directory:
 
+```bash
 npm test
+```
 
 Tests cover:
 
@@ -348,16 +385,20 @@ If build or tests fail the pipeline fails.
 
 Workflow file:
 
-.github/workflows/backend-ci.yml
+`.github/workflows/backend-ci.yml`
 
 ---
 
 ## Development Roadmap
+
+Completed recently:
+
+- AWS EC2 + RDS deployment
+- Production environment configuration
+- Live backend health check validation on AWS
 
 Upcoming phases:
 
 - Input validation layer
 - Pagination and filtering
 - React frontend
-- AWS EC2 + RDS deployment
-- Production environment configuration
