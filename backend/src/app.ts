@@ -1,12 +1,15 @@
 import express from "express";
 
 import { Pool } from "pg";
-import { adminRoutes } from "./routes/admin.routes";
-import { applicationsRoutes } from "./routes/applications.routes";
-import { authRoutes } from "./routes/auth.routes";
-import { healthRoutes } from "./routes/health.routes";
-import { tasksRoutes } from "./routes/tasks.routes";
-import { errorHandler } from "./middleware/errorHandler";
+import {
+  adminRoutes,
+  applicationsRoutes,
+  authRoutes,
+  healthRoutes,
+  tasksRoutes,
+} from "./routes";
+
+import { errorHandler } from "./middleware";
 
 export function createApp(db: Pool) {
   const app = express();

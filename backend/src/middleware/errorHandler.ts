@@ -1,8 +1,8 @@
 import { NextFunction, Request, Response } from "express";
+import { formatZodError, isZodError } from "./validate";
 
 type ApiErrorBody = {
   error: string;
-  details?: unknown;
 };
 
 export function errorHandler(
@@ -11,9 +11,15 @@ export function errorHandler(
   res: Response<ApiErrorBody>,
   _next: NextFunction,
 ) {
-  console.error(err);
-
   if (res.headersSent) return;
+
+  if (isZodError(err)) {
+    return res.status(400).json({
+      error: formatZodError(err),
+    });
+  }
+
+  console.error(err);
 
   res.status(500).json({ error: "Internal Server Error" });
 }

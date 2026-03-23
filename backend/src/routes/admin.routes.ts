@@ -1,7 +1,6 @@
 import { Router } from "express";
 import { Pool } from "pg";
-import { requireAuth } from "../middleware/requireAuth";
-import { requireRole } from "../middleware/requireRole";
+import { requireAuth, requireRole } from "../middleware";
 
 export function adminRoutes(db: Pool) {
   const router = Router();

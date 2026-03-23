@@ -1,9 +1,12 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { createTestAppWithDb, makeTestRequest } from "./testUtils";
+import {
+  createAppExpectNoDbCalls,
+  createTestAppWithDb,
+  makeTestRequest,
+} from "./testUtils";
 
 describe("Auth routes", () => {
-
   test("POST /auth/register creates a user and returns token", async () => {
     const app = createTestAppWithDb(async (sql, params) => {
       const q = sql.toLowerCase();
@@ -180,5 +183,101 @@ describe("Auth routes", () => {
     });
 
     expect(res.status).toBe(401);
+  });
+
+  test("POST /auth/register returns 400 when email is missing", async () => {
+    const app = createAppExpectNoDbCalls("input.invalid");
+
+    const res = await makeTestRequest({
+      app,
+      method: "post",
+      path: "/auth/register",
+      body: { password: "password123" },
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({
+      error: "email is required",
+    });
+  });
+
+  test("POST /auth/register returns 400 when email is invalid", async () => {
+    const app = createAppExpectNoDbCalls("input.invalid");
+
+    const res = await makeTestRequest({
+      app,
+      method: "post",
+      path: "/auth/register",
+      body: { email: "not-an-email", password: "password123" },
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({
+      error: "email must be a valid email address",
+    });
+  });
+
+  test("POST /auth/register returns 400 when password is missing", async () => {
+    const app = createAppExpectNoDbCalls("input.invalid");
+
+    const res = await makeTestRequest({
+      app,
+      method: "post",
+      path: "/auth/register",
+      body: { email: "me@example.com" },
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({
+      error: "password is required",
+    });
+  });
+
+  test("POST /auth/register returns 400 when password is too short", async () => {
+    const app = createAppExpectNoDbCalls("input.invalid");
+
+    const res = await makeTestRequest({
+      app,
+      method: "post",
+      path: "/auth/register",
+      body: { email: "me@example.com", password: "short" },
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({
+      error: "password must be at least 8 characters",
+    });
+  });
+
+  test("POST /auth/login returns 400 when email is missing", async () => {
+    const app = createAppExpectNoDbCalls("input.invalid");
+
+    const res = await makeTestRequest({
+      app,
+      method: "post",
+      path: "/auth/login",
+      body: { password: "password123" },
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({
+      error: "email is required",
+    });
+  });
+
+  test("POST /auth/login returns 400 when password is missing", async () => {
+    const app = createAppExpectNoDbCalls("input.invalid");
+
+    const res = await makeTestRequest({
+      app,
+      method: "post",
+      path: "/auth/login",
+      body: { email: "me@example.com" },
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({
+      error: "password is required",
+    });
   });
 });

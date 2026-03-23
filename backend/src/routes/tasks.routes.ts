@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { Pool } from "pg";
-import { requireAuth } from "../middleware/requireAuth";
+import { requireAuth } from "../middleware";
 
 export function tasksRoutes(db: Pool) {
   const router = Router();
