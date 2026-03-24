@@ -1,15 +1,11 @@
 import { z } from "zod";
-
-const requiredTrimmedString = (fieldName: string) => {
-  const msg = `${fieldName} is required`;
-  return z.string({ error: msg }).trim().min(1, msg);
-};
+import { requiredString, requiredTrimmedString } from "./utils/helpers";
 
 const emailSchema = requiredTrimmedString("email")
   .pipe(z.email({ error: "email must be a valid email address" }))
   .transform((value) => value.toLowerCase());
 
-const passwordSchema = requiredTrimmedString("password");
+const passwordSchema = requiredString("password");
 
 export const registerBodySchema = z.object({
   email: emailSchema,

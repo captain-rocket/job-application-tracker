@@ -6,7 +6,7 @@ import {
 
 describe("Task routes", () => {
   test("GET /health returns status: true", async () => {
-    const app = createTestAppWithDb(async (sql, params) => ({ rows: [] }));
+    const app = createTestAppWithDb(async () => ({ rows: [] }));
 
     const res = await makeTestRequest({
       app,
@@ -78,7 +78,7 @@ describe("Task routes", () => {
   });
 
   test("GET /tasks without JWT returns 401", async () => {
-    const app = createTestAppWithDb(async (sql, params) => ({ rows: [] }));
+    const app = createTestAppWithDb(async () => ({ rows: [] }));
 
     const res = await makeTestRequest({
       app,
@@ -245,7 +245,7 @@ describe("Task routes", () => {
     expect(res.body).toEqual({ error: "Task not found" });
   });
 
-  test("DELETE  /tasks/:id deletes task when found", async () => {
+  test("DELETE /tasks/:id deletes task when found", async () => {
     const deleted = {
       id: 2,
       title: "B",

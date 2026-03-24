@@ -1,6 +1,14 @@
 import { Router } from "express";
 import { Pool } from "pg";
-import { requireAuth } from "../middleware";
+import { requireAuth, validateBody, validateParams } from "../middleware";
+import {
+  createTaskBodySchema,
+  taskIdParamsSchema,
+  updateTaskBodySchema,
+  type TaskIdParams,
+  type CreateTaskBody,
+  type UpdateTaskBody,
+} from "../schemas/task.schemas";
 
 export function tasksRoutes(db: Pool) {
   const router = Router();
@@ -19,39 +27,39 @@ export function tasksRoutes(db: Pool) {
     }
   });
 
-  router.post("/tasks", async (req, res, next) => {
-    const title =
-      typeof req.body?.title === "string" ? req.body?.title.trim() : "";
-    if (!title) return res.status(400).json({ error: "title is required" });
+  router.post(
+    "/tasks",
+    validateBody(createTaskBodySchema),
+    async (req, res, next) => {
+      const { title } = req.body as CreateTaskBody;
 
-    try {
-      const result = await db.query(
-        "INSERT INTO tasks (user_id, title) VALUES ($1, $2) RETURNING id, title, completed, created_at",
-        [req.user!.id, title],
-      );
-      res.status(201).json({ task: result.rows[0] });
-    } catch (error) {
-      next(error);
-    }
-  });
+      try {
+        const result = await db.query(
+          "INSERT INTO tasks (user_id, title) VALUES ($1, $2) RETURNING id, title, completed, created_at",
+          [req.user!.id, title],
+        );
+        res.status(201).json({ task: result.rows[0] });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
 
-  router.patch("/tasks/:id", async (req, res, next) => {
-    const id = Number.parseInt(req.params.id, 10);
-    if (Number.isNaN(id)) return res.status(400).json({ error: "Invalid id" });
+  router.patch(
+    "/tasks/:id",
+    validateParams(taskIdParamsSchema),
+    validateBody(updateTaskBodySchema),
+    async (req, res, next) => {
+      const { id: idParam } = req.params as TaskIdParams;
+      const id = Number(idParam);
+      const { title: nextTitle, completed } = req.body as UpdateTaskBody;
 
-    const hasTitle = typeof req.body?.title == "string";
-    const hasCompleted = typeof req.body?.completed === "boolean";
-    if (!hasTitle && !hasCompleted) {
-      return res.status(400).json({ error: "Provide title and/or completed" });
-    }
+      const shouldUpdateTitle = nextTitle !== undefined;
+      const shouldUpdateCompleted = completed !== undefined;
 
-    const title = hasTitle ? req.body?.title.trim() : undefined;
-    if (hasTitle && !title)
-      return res.status(400).json({ error: "title cannot be empty" });
-
-    try {
-      const result = await db.query(
-        `
+      try {
+        const result = await db.query(
+          `
       UPDATE tasks
       SET
         title = COALESCE($3, title),
@@ -59,42 +67,47 @@ export function tasksRoutes(db: Pool) {
       WHERE id = $1 AND user_id = $2
       RETURNING id, title, completed, created_at
       `,
-        [
-          id,
-          req.user!.id,
-          hasTitle ? title : null,
-          hasCompleted ? req.body?.completed : null,
-        ],
-      );
-      if (result.rowCount === 0)
-        return res.status(404).json({ error: "Task not found" });
+          [
+            id,
+            req.user!.id,
+            shouldUpdateTitle ? nextTitle : null,
+            shouldUpdateCompleted ? completed : null,
+          ],
+        );
+        if (result.rowCount === 0)
+          return res.status(404).json({ error: "Task not found" });
 
-      res.json({ task: result.rows[0] });
-    } catch (error) {
-      next(error);
-    }
-  });
+        res.json({ task: result.rows[0] });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
 
-  router.delete("/tasks/:id", async (req, res, next) => {
-    const id = Number.parseInt(req.params.id, 10);
-    if (Number.isNaN(id)) return res.status(400).json({ error: "Invalid id" });
+  router.delete(
+    "/tasks/:id",
+    validateParams(taskIdParamsSchema),
+    async (req, res, next) => {
+      const { id: idParam } = req.params as TaskIdParams;
+      const id = Number(idParam);
 
-    try {
-      const result = await db.query(
-        `DELETE FROM tasks
+      try {
+        const result = await db.query(
+          `DELETE FROM tasks
          WHERE id = $1 AND user_id = $2
          RETURNING id, title, completed, created_at`,
-        [id, req.user!.id],
-      );
-      if (result.rowCount === 0) {
-        return res.status(404).json({ error: "Task not found" });
-      }
+          [id, req.user!.id],
+        );
+        if (result.rowCount === 0) {
+          return res.status(404).json({ error: "Task not found" });
+        }
 
-      res.json({ deleted: result.rows[0] });
-    } catch (error) {
-      next(error);
-    }
-  });
+        res.json({ deleted: result.rows[0] });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
 
   return router;
 }
