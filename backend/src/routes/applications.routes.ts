@@ -1,21 +1,19 @@
 import { Router } from "express";
 import { Pool } from "pg";
-import { requireAuth } from "../middleware";
-import { getTrimmedString } from "../utils/helpers";
+import { requireAuth, validateBody, validateParams } from "../middleware";
+import {
+  applicationIdParamsSchema,
+  createApplicationBodySchema,
+  updateApplicationBodySchema,
+  type ApplicationIdParams,
+  type CreateApplicationBody,
+  type UpdateApplicationBody,
+} from "../schemas/applications.schemas";
 
 export function applicationsRoutes(db: Pool) {
   const router = Router();
 
   router.use(requireAuth);
-
-  const allowedStatuses = new Set([
-    "saved",
-    "applied",
-    "interviewing",
-    "offer",
-    "rejected",
-    "withdrawn",
-  ]);
 
   router.get("/applications", async (req, res, next) => {
     try {
@@ -44,14 +42,16 @@ export function applicationsRoutes(db: Pool) {
     }
   });
 
-  router.get("/applications/:id", async (req, res, next) => {
-    const id = Number(req.params.id);
+  router.get(
+    "/applications/:id",
+    validateParams(applicationIdParamsSchema),
+    async (req, res, next) => {
+      const { id: idParam } = req.params as ApplicationIdParams;
+      const id = Number(idParam);
 
-    if (!Number.isInteger(id) || id <= 0)
-      return res.status(400).json({ error: "Invalid application id" });
-    try {
-      const result = await db.query(
-        `
+      try {
+        const result = await db.query(
+          `
           SELECT
           id,
           company,
@@ -66,44 +66,38 @@ export function applicationsRoutes(db: Pool) {
           FROM applications
           WHERE id = $1 AND user_id = $2
           `,
-        [id, req.user!.id],
-      );
+          [id, req.user!.id],
+        );
 
-      if (!result.rows[0])
-        return res.status(404).json({ error: "Application not found" });
+        if (!result.rows[0])
+          return res.status(404).json({ error: "Application not found" });
 
-      res.status(200).json({ application: result.rows[0] });
-    } catch (error) {
-      next(error);
-    }
-  });
+        res.status(200).json({ application: result.rows[0] });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
 
-  router.post("/applications", async (req, res, next) => {
-    const company = getTrimmedString(req.body?.company) ?? "";
+  router.post(
+    "/applications",
+    validateBody(createApplicationBodySchema),
+    async (req, res, next) => {
+      const {
+        company,
+        job_title,
+        status: providedStatus,
+        job_url,
+        location,
+        notes,
+        applied_at,
+      } = req.body as CreateApplicationBody;
 
-    const job_title = getTrimmedString(req.body?.job_title) ?? "";
+      const status = providedStatus ?? "saved";
 
-    const status = getTrimmedString(req.body?.status) ?? "saved";
-
-    const job_url = getTrimmedString(req.body?.job_url);
-
-    const location = getTrimmedString(req.body?.location);
-
-    const notes = getTrimmedString(req.body?.notes);
-
-    const applied_at = getTrimmedString(req.body?.applied_at);
-
-    if (!company) return res.status(400).json({ error: "company is required" });
-
-    if (!job_title)
-      return res.status(400).json({ error: "job_title is required" });
-
-    if (!allowedStatuses.has(status))
-      return res.status(400).json({ error: "Invalid status" });
-
-    try {
-      const result = await db.query(
-        `
+      try {
+        const result = await db.query(
+          `
           INSERT INTO applications (
           user_id,
           company,
@@ -127,98 +121,61 @@ export function applicationsRoutes(db: Pool) {
           created_at,
           updated_at
           `,
-        [
-          req.user!.id,
-          company,
-          job_title,
-          status,
-          job_url,
-          location,
-          notes,
-          applied_at,
-        ],
-      );
-      res.status(201).json({ application: result.rows[0] });
-    } catch (error) {
-      next(error);
-    }
-  });
+          [
+            req.user!.id,
+            company,
+            job_title,
+            status,
+            job_url ?? null,
+            location ?? null,
+            notes ?? null,
+            applied_at ?? null,
+          ],
+        );
+        res.status(201).json({ application: result.rows[0] });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
 
-  router.patch("/applications/:id", async (req, res, next) => {
-    const id = Number(req.params.id);
+  router.patch(
+    "/applications/:id",
+    validateParams(applicationIdParamsSchema),
+    validateBody(updateApplicationBodySchema),
+    async (req, res, next) => {
+      const { id: idParam } = req.params as ApplicationIdParams;
+      const id = Number(idParam);
+      const body = req.body as UpdateApplicationBody;
 
-    if (!Number.isInteger(id) || id <= 0)
-      return res.status(400).json({ error: "Invalid application id" });
+      const updates: string[] = [];
+      const values: unknown[] = [];
+      let paramIndex = 1;
 
-    const updates: string[] = [];
-    const values: unknown[] = [];
-    let paramIndex = 1;
+      const fields = [
+        "company",
+        "job_title",
+        "status",
+        "job_url",
+        "location",
+        "notes",
+        "applied_at",
+      ] as const satisfies ReadonlyArray<keyof UpdateApplicationBody>;
 
-    const body = req.body && typeof req.body === "object" ? req.body : {};
+      for (const field of fields) {
+        const value = body[field];
+        if (value !== undefined) {
+          updates.push(`${field} = $${paramIndex++}`);
+          values.push(value);
+        }
+      }
 
-    if (Object.hasOwn(body, "company")) {
-      const company = getTrimmedString(body.company);
-      if (!company)
-        return res.status(400).json({ error: "company cannot be empty" });
-      updates.push(`company = $${paramIndex++}`);
-      values.push(company);
-    }
+      updates.push(`updated_at = NOW()`);
+      values.push(id, req.user!.id);
 
-    if (Object.hasOwn(body, "job_title")) {
-      const job_title = getTrimmedString(body.job_title);
-      if (!job_title)
-        return res.status(400).json({ error: "job_title cannot be empty" });
-      updates.push(`job_title = $${paramIndex++}`);
-      values.push(job_title);
-    }
-
-    if (Object.hasOwn(body, "status")) {
-      const status = getTrimmedString(body.status);
-
-      if (!status || !allowedStatuses.has(status))
-        return res.status(400).json({ error: "Invalid status" });
-
-      updates.push(`status = $${paramIndex++}`);
-      values.push(status);
-    }
-
-    if (Object.hasOwn(body, "job_url")) {
-      const job_url = getTrimmedString(body.job_url);
-
-      updates.push(`job_url = $${paramIndex++}`);
-      values.push(job_url);
-    }
-
-    if (Object.hasOwn(body, "location")) {
-      const location = getTrimmedString(body.location);
-      updates.push(`location = $${paramIndex++}`);
-      values.push(location);
-    }
-
-    if (Object.hasOwn(body, "notes")) {
-      const notes = getTrimmedString(body.notes);
-      updates.push(`notes = $${paramIndex++}`);
-      values.push(notes);
-    }
-
-    if (Object.hasOwn(body, "applied_at")) {
-      const applied_at = getTrimmedString(body.applied_at);
-      updates.push(`applied_at = $${paramIndex++}`);
-      values.push(applied_at);
-    }
-
-    if (updates.length === 0) {
-      return res
-        .status(400)
-        .json({ error: "No valid fields provided for update" });
-    }
-
-    updates.push(`updated_at = NOW()`);
-    values.push(id, req.user!.id);
-
-    try {
-      const result = await db.query(
-        `
+      try {
+        const result = await db.query(
+          `
         UPDATE applications
         SET ${updates.join(", ")}
         WHERE id = $${paramIndex++} AND user_id = $${paramIndex}
@@ -234,42 +191,45 @@ export function applicationsRoutes(db: Pool) {
         created_at,
         updated_at
         `,
-        values,
-      );
+          values,
+        );
 
-      if (!result.rows[0])
-        return res.status(404).json({ error: "Application not found" });
+        if (!result.rows[0])
+          return res.status(404).json({ error: "Application not found" });
 
-      res.status(200).json({ application: result.rows[0] });
-    } catch (error) {
-      next(error);
-    }
-  });
+        res.status(200).json({ application: result.rows[0] });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
 
-  router.delete("/applications/:id", async (req, res, next) => {
-    const id = Number(req.params.id);
+  router.delete(
+    "/applications/:id",
+    validateParams(applicationIdParamsSchema),
+    async (req, res, next) => {
+      const { id: idParam } = req.params as ApplicationIdParams;
+      const id = Number(idParam);
 
-    if (!Number.isInteger(id) || id <= 0)
-      return res.status(400).json({ error: "Invalid application id" });
-
-    try {
-      const result = await db.query(
-        `
+      try {
+        const result = await db.query(
+          `
         DELETE FROM applications
         WHERE id = $1 AND user_id = $2
         RETURNING id
         `,
-        [id, req.user!.id],
-      );
+          [id, req.user!.id],
+        );
 
-      if (!result.rows[0])
-        return res.status(404).json({ error: "Application not found" });
+        if (!result.rows[0])
+          return res.status(404).json({ error: "Application not found" });
 
-      res.status(200).json({ message: "Application deleted" });
-    } catch (error) {
-      next(error);
-    }
-  });
+        res.status(200).json({ message: "Application deleted" });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
 
   return router;
 }

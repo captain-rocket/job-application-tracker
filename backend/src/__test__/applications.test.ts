@@ -375,6 +375,57 @@ describe("Application routes", () => {
     expect(res.body).toEqual({ error: "No valid fields provided for update" });
   });
 
+  test("PATCH /applications/:id returns 400 when company is empty", async () => {
+    const app = createAppExpectNoDbCalls("input.invalid");
+
+    const res = await makeTestRequest({
+      app,
+      method: "patch",
+      path: "/applications/1",
+      auth: { sub: "user-123", role: "user" },
+      body: { company: "   " },
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({
+      error: "company cannot be empty",
+    });
+  });
+
+  test("PATCH /applications/:id returns 400 when job_title is empty", async () => {
+    const app = createAppExpectNoDbCalls("input.invalid");
+
+    const res = await makeTestRequest({
+      app,
+      method: "patch",
+      path: "/applications/1",
+      auth: { sub: "user-123", role: "user" },
+      body: { job_title: "   " },
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({
+      error: "job_title cannot be empty",
+    });
+  });
+
+  test("PATCH /applications/:id returns 400 when only unknown fields are provided", async () => {
+    const app = createAppExpectNoDbCalls("fields.noneProvided");
+
+    const res = await makeTestRequest({
+      app,
+      method: "patch",
+      path: "/applications/1",
+      auth: { sub: "user-123", role: "user" },
+      body: { unsupported_field: "value" },
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({
+      error: "No valid fields provided for update",
+    });
+  });
+
   test("PATCH /applications/:id returns 400 when invalid status", async () => {
     const app = createAppExpectNoDbCalls("input.invalid");
 
