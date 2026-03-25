@@ -19,11 +19,13 @@ describe("Application routes", () => {
     });
   });
 
-  test("GET /applications returns applications for authenticated user", async () => {
+  test("GET /applications returns paginated applications for authenticated user", async () => {
     const app = createTestAppWithDb(async (sql, params) => {
       expect(sql.toLowerCase()).toContain("from applications");
       expect(sql.toLowerCase()).toContain("where user_id = $1");
-      expect(params).toEqual(["user-123"]);
+      expect(sql).toContain("COUNT(*) OVER()::int AS total_count");
+      expect(sql).toContain("LIMIT $2 OFFSET $3");
+      expect(params).toEqual(["user-123", 50, 0]);
 
       return {
         rows: [
@@ -38,6 +40,7 @@ describe("Application routes", () => {
             applied_at: "2026-03-12T12:00:00.000Z",
             created_at: "2026-03-12T12:00:00.000Z",
             updated_at: "2026-03-12T12:00:00.000Z",
+            total_count: 2,
           },
           {
             id: 1,
@@ -50,6 +53,7 @@ describe("Application routes", () => {
             applied_at: null,
             created_at: "2026-03-12T12:00:00.000Z",
             updated_at: "2026-03-12T12:00:00.000Z",
+            total_count: 2,
           },
         ],
         rowCount: 2,
@@ -91,7 +95,130 @@ describe("Application routes", () => {
           updated_at: "2026-03-12T12:00:00.000Z",
         },
       ],
+      pagination: {
+        page: 1,
+        limit: 50,
+        total: 2,
+        totalPages: 1,
+      },
     });
+  });
+
+  test("GET /applications applies status filter and pagination query params", async () => {
+    const app = createTestAppWithDb(async (sql, params) => {
+      expect(sql.toLowerCase()).toContain("where user_id = $1 and status = $2");
+      expect(sql).toContain("LIMIT $3 OFFSET $4");
+      expect(params).toEqual(["user-123", "applied", 5, 5]);
+
+      return {
+        rows: [
+          {
+            id: 7,
+            company: "Filter Corp",
+            job_title: "Backend Engineer",
+            status: "applied",
+            job_url: null,
+            location: null,
+            notes: null,
+            applied_at: "2026-03-15T12:00:00.000Z",
+            created_at: "2026-03-15T12:00:00.000Z",
+            updated_at: "2026-03-15T12:00:00.000Z",
+            total_count: 11,
+          },
+        ],
+        rowCount: 1,
+      };
+    });
+
+    const res = await makeTestRequest({
+      app,
+      method: "get",
+      path: "/applications?status=applied&page=2&limit=5",
+      auth: { sub: "user-123", role: "user" },
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      applications: [
+        {
+          id: 7,
+          company: "Filter Corp",
+          job_title: "Backend Engineer",
+          status: "applied",
+          job_url: null,
+          location: null,
+          notes: null,
+          applied_at: "2026-03-15T12:00:00.000Z",
+          created_at: "2026-03-15T12:00:00.000Z",
+          updated_at: "2026-03-15T12:00:00.000Z",
+        },
+      ],
+      pagination: {
+        page: 2,
+        limit: 5,
+        total: 11,
+        totalPages: 3,
+      },
+    });
+  });
+
+  test("GET /applications keeps pagination totals when requested page has no rows", async () => {
+    let callCount = 0;
+
+    const app = createTestAppWithDb(async (sql, params) => {
+      callCount += 1;
+      if (callCount === 1) {
+        expect(sql).toContain("COUNT(*) OVER()::int AS total_count");
+        expect(sql).toContain("LIMIT $2 OFFSET $3");
+        expect(params).toEqual(["user-123", 5, 15]);
+        return {
+          rows: [],
+          rowCount: 0,
+        };
+      }
+
+      expect(sql).toContain("SELECT COUNT(*)::int AS total_count");
+      expect(sql.toLowerCase()).toContain("where user_id = $1");
+      expect(params).toEqual(["user-123"]);
+
+      return {
+        rows: [{ total_count: 11 }],
+        rowCount: 1,
+      };
+    });
+
+    const res = await makeTestRequest({
+      app,
+      method: "get",
+      path: "/applications?page=4&limit=5",
+      auth: { sub: "user-123", role: "user" },
+    });
+
+    expect(callCount).toBe(2);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      applications: [],
+      pagination: {
+        page: 4,
+        limit: 5,
+        total: 11,
+        totalPages: 3,
+      },
+    });
+  });
+
+  test("GET /applications returns 400 for invalid pagination query", async () => {
+    const app = createAppExpectNoDbCalls("input.invalid");
+
+    const res = await makeTestRequest({
+      app,
+      method: "get",
+      path: "/applications?page=0",
+      auth: { sub: "user-123", role: "user" },
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: "page must be at least 1" });
   });
 
   test("GET /applications/:id returns 400 for invalid id", async () => {
