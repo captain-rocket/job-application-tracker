@@ -8,20 +8,20 @@ type JwtPayload = {
 };
 
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
-  
   let jwtSecret: string;
   try {
-    jwtSecret = getAuthEnv().jwtSecret
+    jwtSecret = getAuthEnv().jwtSecret;
   } catch (error) {
-    
-    return res.status(500).json({ error: "JWT_SECRET not configured" });
+    return next(error);
   }
 
   const header = req.get("authorization") || "";
   const [scheme, token] = header.split(" ");
 
   if (scheme !== "Bearer" || !token) {
-    return res.status(401).json({ error: "Missing or invalid Authorization header"});
+    return res
+      .status(401)
+      .json({ error: "Missing or invalid Authorization header" });
   }
 
   try {

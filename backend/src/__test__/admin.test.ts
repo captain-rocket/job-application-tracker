@@ -1,7 +1,6 @@
 import { createTestAppWithDb, makeTestRequest } from "./testUtils";
 
 describe("Admin routes", () => {
-
   test("Get /admin/users returns 403 for non-admin", async () => {
     const app = createTestAppWithDb(async () => ({ rows: [] }));
 
@@ -13,6 +12,7 @@ describe("Admin routes", () => {
     });
 
     expect(res.status).toBe(403);
+    expect(res.body).toEqual({ error: "Forbidden" });
   });
 
   test("GET /admin/users returns users for admin", async () => {
@@ -44,5 +44,8 @@ describe("Admin routes", () => {
     });
 
     expect(res.status).toBe(401);
+    expect(res.body).toEqual({
+      error: "Missing or invalid Authorization header",
+    });
   });
 });

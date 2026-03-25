@@ -137,6 +137,7 @@ describe("Auth routes", () => {
     });
 
     expect(res.status).toBe(401);
+    expect(res.body).toEqual({ error: "Invalid credentials" });
   });
 
   test("GET /auth/me returns user for valid token", async () => {
@@ -173,6 +174,25 @@ describe("Auth routes", () => {
     expect(res.body.user.email).toBe("me@example.com");
   });
 
+  test("GET /auth/me returns 404 when user does not exist", async () => {
+    const app = createTestAppWithDb(async () => ({
+      rows: [],
+      rowCount: 0,
+    }));
+
+    const res = await makeTestRequest({
+      app,
+      method: "get",
+      path: "/auth/me",
+      auth: { sub: "missing-user", role: "user" },
+    });
+
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({
+      error: "user not found",
+    });
+  });
+
   test("GET /auth/me returns 401 without token", async () => {
     const app = createTestAppWithDb(async () => ({ rows: [], rowCount: 0 }));
 
@@ -183,6 +203,9 @@ describe("Auth routes", () => {
     });
 
     expect(res.status).toBe(401);
+    expect(res.body).toEqual({
+      error: "Missing or invalid Authorization header",
+    });
   });
 
   test("POST /auth/register returns 400 when email is missing", async () => {

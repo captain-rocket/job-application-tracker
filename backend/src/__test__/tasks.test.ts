@@ -87,6 +87,9 @@ describe("Task routes", () => {
     });
 
     expect(res.status).toBe(401);
+    expect(res.body).toEqual({
+      error: "Missing or invalid Authorization header",
+    });
   });
 
   test("POST /tasks returns 400 when title is missing", async () => {
@@ -102,6 +105,31 @@ describe("Task routes", () => {
 
     expect(res.status).toBe(400);
     expect(res.body).toEqual({ error: "title is required" });
+  });
+
+  test("GET /tasks returns 500 with standard error body for unexpected db errors", async () => {
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    try {
+      const app = createTestAppWithDb(async () => {
+        throw new Error("db exploded");
+      });
+
+      const res = await makeTestRequest({
+        app,
+        method: "get",
+        path: "/tasks",
+        auth: { sub: "user-12", role: "user" },
+      });
+
+      expect(res.status).toBe(500);
+      expect(res.body).toEqual({ error: "Internal Server Error" });
+      expect(consoleErrorSpy).toHaveBeenCalled();
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
   });
 
   test("POST /tasks returns 400 when title is blank", async () => {
