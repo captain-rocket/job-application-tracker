@@ -221,6 +221,124 @@ describe("Application routes", () => {
     expect(res.body).toEqual({ error: "page must be at least 1" });
   });
 
+  test("GET /applications applies status filter with default pagination", async () => {
+    const app = createTestAppWithDb(async (sql, params) => {
+      expect(sql.toLowerCase()).toContain("where user_id = $1 and status = $2");
+      expect(sql).toContain("LIMIT $3 OFFSET $4");
+      expect(params).toEqual(["user-123", "interviewing", 50, 0]);
+
+      return {
+        rows: [
+          {
+            id: 3,
+            company: "Default Paging Corp",
+            job_title: "Platform Engineer",
+            status: "interviewing",
+            job_url: null,
+            location: null,
+            notes: null,
+            applied_at: null,
+            created_at: "2026-03-16T12:00:00.000Z",
+            updated_at: "2026-03-16T12:00:00.000Z",
+            total_count: 1,
+          },
+        ],
+        rowCount: 1,
+      };
+    });
+    const res = await makeTestRequest({
+      app,
+      method: "get",
+      path: "/applications?status=interviewing",
+      auth: { sub: "user-123", role: "user" },
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      applications: [
+        {
+          id: 3,
+          company: "Default Paging Corp",
+          job_title: "Platform Engineer",
+          status: "interviewing",
+          job_url: null,
+          location: null,
+          notes: null,
+          applied_at: null,
+          created_at: "2026-03-16T12:00:00.000Z",
+          updated_at: "2026-03-16T12:00:00.000Z",
+        },
+      ],
+      pagination: {
+        page: 1,
+        limit: 50,
+        total: 1,
+        totalPages: 1,
+      },
+    });
+  });
+
+  test("GET /applications returns 400 for invalid status query", async () => {
+    const app = createAppExpectNoDbCalls("input.invalid");
+    const res = await makeTestRequest({
+      app,
+      method: "get",
+      path: "/applications?status=unsupported_status",
+      auth: { sub: "user-123", role: "user" },
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: "Invalid status" });
+  });
+
+  test("GET /applications returns 400 for limit above max", async () => {
+    const app = createAppExpectNoDbCalls("input.invalid");
+
+    const res = await makeTestRequest({
+      app,
+      method: "get",
+      path: "/applications?limit=51",
+      auth: { sub: "user-123", role: "user" },
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({
+      error: "limit must be at most 50",
+    });
+  });
+
+  test("GET /applications returns 400 for non-integer page", async () => {
+    const app = createAppExpectNoDbCalls("input.invalid");
+
+    const res = await makeTestRequest({
+      app,
+      method: "get",
+      path: "/applications?page=1.5",
+      auth: { sub: "user-123", role: "user" },
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({
+      error: "page must be a whole number",
+    });
+  });
+
+  test("GET /applications returns 400 for non-integer limit", async () => {
+    const app = createAppExpectNoDbCalls("input.invalid");
+
+    const res = await makeTestRequest({
+      app,
+      method: "get",
+      path: "/applications?limit=abc",
+      auth: { sub: "user-123", role: "user" },
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({
+      error: "limit must be a whole number",
+    });
+  });
+
   test("GET /applications/:id returns 400 for invalid id", async () => {
     const app = createAppExpectNoDbCalls("input.invalid");
 

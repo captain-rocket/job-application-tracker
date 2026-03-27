@@ -32,10 +32,14 @@ export const applicationIdParamsSchema = z.object({
 
 export const listApplicationsQuerySchema = z.object({
   status: applicationStatusSchema.optional(),
-  page: z.coerce.number().int().min(1, "page must be at least 1").default(1),
+  page: z.coerce
+    .number({ error: "page must be a whole number" })
+    .int("page must be a whole number")
+    .min(1, "page must be at least 1")
+    .default(1),
   limit: z.coerce
-    .number()
-    .int()
+    .number({ error: "limit must be a whole number" })
+    .int("limit must be a whole number")
     .min(1, "limit must be at least 1")
     .max(50, "limit must be at most 50")
     .default(50),
