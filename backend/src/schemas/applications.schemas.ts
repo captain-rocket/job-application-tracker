@@ -73,5 +73,6 @@ export const updateApplicationBodySchema = z.preprocess(
 );
 
 export type ApplicationIdParams = z.infer<typeof applicationIdParamsSchema>;
+export type ListApplicationsQuery = z.infer<typeof listApplicationsQuerySchema>;
 export type CreateApplicationBody = z.infer<typeof createApplicationBodySchema>;
 export type UpdateApplicationBody = z.infer<typeof updateApplicationBodySchema>;

@@ -16,7 +16,19 @@ function validate(schema: ZodType, target: RequestTarget) {
   return (req: Request, _res: Response, next: NextFunction) => {
     try {
       const parsed = schema.parse(req[target]);
-      (req as Request & Record<RequestTarget, unknown>)[target] = parsed;
+
+      if (target === "query") {
+        Object.defineProperty(req, "query", {
+          value: parsed,
+          writable: true,
+          enumerable: true,
+          configurable: true,
+        });
+      } else {
+        (req as Request & Record<Exclude<RequestTarget, "query">, unknown>)[
+          target
+        ] = parsed;
+      }
       next();
     } catch (error) {
       next(error);

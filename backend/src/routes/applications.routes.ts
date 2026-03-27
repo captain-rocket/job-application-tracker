@@ -1,12 +1,18 @@
 import { Router } from "express";
 import { Pool } from "pg";
-import { requireAuth, validateBody, validateParams } from "../middleware";
+import {
+  requireAuth,
+  validateBody,
+  validateParams,
+  validateQuery,
+} from "../middleware";
 import {
   applicationIdParamsSchema,
   createApplicationBodySchema,
   listApplicationsQuerySchema,
   updateApplicationBodySchema,
   type ApplicationIdParams,
+  type ListApplicationsQuery,
   type CreateApplicationBody,
   type UpdateApplicationBody,
 } from "../schemas/applications.schemas";
@@ -16,28 +22,31 @@ export function applicationsRoutes(db: Pool) {
 
   router.use(requireAuth);
 
-  router.get("/applications", async (req, res, next) => {
-    const { status, page, limit } = listApplicationsQuerySchema.parse(
-      req.query,
-    );
-    const offset = (page - 1) * limit;
+  router.get(
+    "/applications",
+    validateQuery(listApplicationsQuerySchema),
+    async (req, res, next) => {
+      const query = req.query as unknown as ListApplicationsQuery;
+      const { status, page, limit } = query;
 
-    const values: unknown[] = [req.user!.id];
-    const whereClauses = ["user_id = $1"];
+      const offset = (page - 1) * limit;
 
-    if (status) {
-      values.push(status);
-      whereClauses.push(`status = $${values.length}`);
-    }
+      const values: unknown[] = [req.user!.id];
+      const whereClauses = ["user_id = $1"];
 
-    values.push(limit, offset);
-    const limitParam = values.length - 1;
-    const offsetParam = values.length;
-    const countParams = [...values.slice(0, limitParam - 1)];
+      if (status) {
+        values.push(status);
+        whereClauses.push(`status = $${values.length}`);
+      }
 
-    try {
-      const result = await db.query(
-        `
+      values.push(limit, offset);
+      const limitParam = values.length - 1;
+      const offsetParam = values.length;
+      const countParams = [...values.slice(0, limitParam - 1)];
+
+      try {
+        const result = await db.query(
+          `
         SELECT
         id,
         company,
@@ -55,39 +64,40 @@ export function applicationsRoutes(db: Pool) {
         ORDER BY id DESC
         LIMIT $${limitParam} OFFSET $${offsetParam}
         `,
-        values,
-      );
-      let total = result.rows[0]?.total_count ?? 0;
+          values,
+        );
+        let total = result.rows[0]?.total_count ?? 0;
 
-      if (result.rows.length === 0 && page > 1) {
-        const countResult = await db.query(
-          `
+        if (result.rows.length === 0 && page > 1) {
+          const countResult = await db.query(
+            `
           SELECT COUNT(*)::int AS total_count
           FROM applications
           WHERE ${whereClauses.join(" AND ")}
           `,
-          countParams,
+            countParams,
+          );
+          total = countResult.rows[0]?.total_count ?? 0;
+        }
+
+        const applications = result.rows.map(
+          ({ total_count, ...application }) => application,
         );
-        total = countResult.rows[0]?.total_count ?? 0;
+
+        res.status(200).json({
+          applications,
+          pagination: {
+            page,
+            limit,
+            total,
+            totalPages: total === 0 ? 0 : Math.ceil(total / limit),
+          },
+        });
+      } catch (error) {
+        next(error);
       }
-
-      const applications = result.rows.map(
-        ({ total_count, ...application }) => application,
-      );
-
-      res.status(200).json({
-        applications,
-        pagination: {
-          page,
-          limit,
-          total,
-          totalPages: total === 0 ? 0 : Math.ceil(total / limit),
-        },
-      });
-    } catch (error) {
-      next(error);
-    }
-  });
+    },
+  );
 
   router.get(
     "/applications/:id",
