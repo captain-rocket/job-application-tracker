@@ -122,6 +122,51 @@ docker run -d \
 
 ___
 
+## GitHub Actions CD
+
+The backend can also be deployed through GitHub Actions using the existing EC2 host.
+
+Trigger options:
+
+- Automatic deploy on push to `main` after backend build and tests pass
+- Manual redeploy with `workflow_dispatch` from the Actions tab on `main`
+
+Workflow behavior:
+
+- Runs the backend CI job first
+- Connects to EC2 over SSH
+- Runs `git pull --ff-only origin main` on the EC2 checkout
+- Rebuilds the `job-tracker-api` Docker image
+- Replaces the running `job-tracker-api` container
+- Verifies `http://localhost:4000/health` on the instance
+
+### Required GitHub configuration
+
+GitHub Actions secrets:
+
+- `EC2_HOST`
+- `EC2_USERNAME`
+- `EC2_SSH_KEY`
+- `EC2_PORT` (optional defaults to 22)
+
+GitHub Actions variable:
+
+`EC2_DEPLOY_PATH` - absolute path to the repository checkout on EC2
+
+### EC2 prerequisites for CD
+
+The EC2 instance must already have:
+
+- Docker installed and running
+- This repository cloned at `EC2_DEPLOY_PATH`
+- backend/.env created on the server
+- The SSH user able to run Docker commands
+- Git access configured so `git pull origin main` succeeds on the server
+
+Application secrets are not copied from GitHub Actions during deploy. Production environment variables continue to live in backend/.env on EC2.
+
+___
+
 ## Verify
 
 ### From EC2
@@ -336,7 +381,6 @@ Not yet included:
 - domain name
 - HTTPS / reverse proxy
 - Elastic IP
-- deployment automation
 - secret manager integration
 - process manager outside Docker
 - load balancer

@@ -13,7 +13,7 @@ Tech stack:
 - PostgreSQL
 - Docker Compose
 - Jest + Supertest
-- GitHub Actions CI
+- GitHub Actions CI/CD
 
 The backend provides authenticated REST endpoints for managing tasks and job applications.
 
@@ -39,7 +39,7 @@ Current backend features:
 - Job application CRUD endpoints
 - Development seed script
 - Jest + Supertest API tests
-- CI pipeline via GitHub Actions
+- CI/CD pipeline via GitHub Actions
 
 ---
 
@@ -368,24 +368,36 @@ Tests use a mocked database layer for fast and deterministic execution.
 
 ---
 
-## Continuous Integration
+## Continuous Integration / Deployment
 
-GitHub Actions runs automatically on:
+GitHub Actions runs the backend workflow on:
 
-- push to main
+- push to `main`
 - pull requests affecting backend code
+- manual `workflow_dispatch` runs from the Actions tab
 
-The pipeline performs:
+The workflow performs:
 
 1. Install dependencies
 2. TypeScript build
 3. Jest test execution
+4. Deploy the backend to EC2 only for successful `main` branch runs
 
-If build or tests fail the pipeline fails.
+Deployment uses the existing EC2 + Docker + RDS setup:
+
+- Backend only
+- SSH from GitHub Actions to EC2
+- `git pull` on the server
+- Docker rebuild + container restart on EC2
+- Application environment variables stay in `backend/.env` on the server
+
+If build or tests fail, deployment does not run
 
 Workflow file:
 
 `.github/workflows/backend-ci.yml`
+
+Additional production setup details, required GitHub secrets, and server prerequisites are documented in `backend/DEPLOYMENT.md`.
 
 ---
 
