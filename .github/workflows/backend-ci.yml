@@ -46,6 +46,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
 
     env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       EC2_HOST: ${{ secrets.EC2_HOST }}
       EC2_PORT: ${{ secrets.EC2_PORT != '' && secrets.EC2_PORT || '22' }}
       EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
@@ -53,7 +54,7 @@ jobs:
 
     steps:
       - name: Start SSH agent
-        uses: webfactory/ssh-agent@v0.9.0
+        uses: webfactory/ssh-agent@v0.10.0
         with:
           ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
 
