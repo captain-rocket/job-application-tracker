@@ -315,7 +315,7 @@ Job Applications
 
 GET /applications
 
-Returns all applications for the authenticated user.
+Returns paginated applications for the authenticated user. Supports optional `status`, `page`, and `limit` query params and includes pagination metadata in the response.
 
 GET /applications/:id
 
@@ -372,8 +372,8 @@ Tests use a mocked database layer for fast and deterministic execution.
 
 GitHub Actions runs the backend workflow on:
 
-- push to `main`
-- pull requests affecting backend code
+- push to `main` when backend code or `.github/workflows/backend-ci.yml` changes
+- pull requests affecting backend code or `.github/workflows/backend-ci.yml`
 - manual `workflow_dispatch` runs from the Actions tab
 
 The workflow performs:
@@ -381,13 +381,13 @@ The workflow performs:
 1. Install dependencies
 2. TypeScript build
 3. Jest test execution
-4. Deploy the backend to EC2 only for successful `main` branch runs
+4. Deploy the backend to EC2 only for manual `workflow_dispatch` runs after CI succeeds
 
 Deployment uses the existing EC2 + Docker + RDS setup:
 
 - Backend only
 - SSH from GitHub Actions to EC2
-- `git pull` on the server
+- Runs `git fetch origin main`, `git checkout main` and `git pull --ff-only origin main`
 - Docker rebuild + container restart on EC2
 - Application environment variables stay in `backend/.env` on the server
 
@@ -411,6 +411,4 @@ Completed recently:
 
 Upcoming phases:
 
-- Input validation layer
-- Pagination and filtering
 - React frontend

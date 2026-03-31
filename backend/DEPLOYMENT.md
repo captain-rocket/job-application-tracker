@@ -128,14 +128,16 @@ The backend can also be deployed through GitHub Actions using the existing EC2 h
 
 Trigger options:
 
-- Automatic deploy on push to `main` after backend build and tests pass
-- Manual redeploy with `workflow_dispatch` from the Actions tab on `main`
+- CI runs on push to `main` when `backend/**` or `.github/workflows/backend-ci.yml` changes
+- CI runs on pull requests affected by `backend/**` or `.github/workflows/backend-ci.yml` changes
+- Deployment runs only on manual `workflow_dispatch` from the Actions tab
 
 Workflow behavior:
 
 - Runs the backend CI job first
+- Deploy job runs only for `workflow_dispatch`
 - Connects to EC2 over SSH
-- Runs `git pull --ff-only origin main` on the EC2 checkout
+- Runs `git fetch origin main`, `git checkout main` and `git pull --ff-only origin main` on the EC2 checkout
 - Rebuilds the `job-tracker-api` Docker image
 - Replaces the running `job-tracker-api` container
 - Verifies `http://localhost:4000/health` on the instance
@@ -161,7 +163,7 @@ The EC2 instance must already have:
 - This repository cloned at `EC2_DEPLOY_PATH`
 - backend/.env created on the server
 - The SSH user able to run Docker commands
-- Git access configured so `git pull origin main` succeeds on the server
+- Git access configured so `git fetch origin main` and `git pull --ff-only origin main` succeed on the server
 
 Application secrets are not copied from GitHub Actions during deploy. Production environment variables continue to live in backend/.env on EC2.
 
