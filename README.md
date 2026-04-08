@@ -45,23 +45,45 @@ Current backend features:
 
 ## Project Structure
 
+High-level tree of the main project files:
+
 ```text
 job-application-tracker/
+├── .github/
+│   └── workflows/
+│       └── backend-ci.yml
 ├── backend/
 │   ├── src/
 │   │   ├── __test__/
+│   │   │   ├── admin.test.ts
+│   │   │   ├── applications.test.ts
+│   │   │   ├── auth.test.ts
+│   │   │   ├── db.test.ts
+│   │   │   ├── env.test.ts
+│   │   │   ├── setupEnv.ts
+│   │   │   ├── tasks.test.ts
+│   │   │   ├── testUtils.ts
+│   │   │   └── tsconfig.json
 │   │   ├── config/
+│   │   │   ├── db.ts
 │   │   │   └── env.ts
 │   │   ├── middleware/
 │   │   │   ├── errorHandler.ts
+│   │   │   ├── index.ts
 │   │   │   ├── requireAuth.ts
-│   │   │   └── requireRole.ts
+│   │   │   ├── requireRole.ts
+│   │   │   └── validate.ts
 │   │   ├── routes/
 │   │   │   ├── admin.routes.ts
 │   │   │   ├── applications.routes.ts
 │   │   │   ├── auth.routes.ts
 │   │   │   ├── health.routes.ts
+│   │   │   ├── index.ts
 │   │   │   └── tasks.routes.ts
+│   │   ├── schemas/
+│   │   │   ├── applications.schemas.ts
+│   │   │   ├── auth.schemas.ts
+│   │   │   └── task.schemas.ts
 │   │   ├── scripts/
 │   │   │   └── seed.ts
 │   │   ├── types/
@@ -70,16 +92,19 @@ job-application-tracker/
 │   │   │   └── helpers.ts
 │   │   ├── app.ts
 │   │   └── server.ts
+│   ├── .env.example
+│   ├── .env.homelab.example
+│   ├── DEPLOYMENT.md
 │   ├── Dockerfile
 │   ├── jest.config.js
 │   ├── package.json
 │   ├── tsconfig.json
 │   └── tsconfig.test.json
 ├── db/
-│   └── init.sql
-├── .github/
-│   └── workflows/
-│       └── backend-ci.yml
+│   ├── init.homelab.sql
+│   ├── init.sql
+│   └── preflight.homelab.sh
+├── docker-compose.homelab.yml
 ├── docker-compose.yml
 └── README.md
 ```
@@ -166,6 +191,8 @@ cp backend/.env.example backend/.env
 docker compose up --build
 ```
 
+The Compose stack waits for PostgreSQL to report healthy before the API container starts, so the API's startup database probe does not race initial database boot.
+
 The API will be available at:
 
 <http://localhost:4000>
@@ -198,7 +225,63 @@ For Docker Compose, the database connection values are supplied by `docker-compo
 
 ---
 
-## Deployment
+## Deployment Targets
+
+### AWS deployment
+
+The production AWS deployment path remains:
+
+- API container on EC2
+- PostgreSQL on AWS RDS
+- GitHub Actions manual deploy to EC2
+
+See `backend/DEPLOYMENT.md` for the full AWS deployment instructions.
+
+### Home lab deployment
+
+An additional self-hosted deployment target is available for a single VM using Docker Compose:
+
+- API container on the VM
+- PostgreSQL container on the same VM
+- Persistent PostgreSQL volume
+- API exposed on port 4000
+- First boot initializes schema only, with no demo accounts or seed data
+
+Setup from the repository root:
+
+```bash
+cp backend/.env.homelab.example backend/.env.homelab
+```
+
+Update `backend/.env.homelab` with a strong `JWT_SECRET` and real database credentials before starting the stack. `DB_USER` and `DB_PASSWORD` are for the lower-privilege application role that the init script creates on first boot, while `POSTGRES_USER` and `POSTGRES_PASSWORD` are for the bootstrap admin account used by the Postgres container. `DB_USER` must differ from `POSTGRES_USER`.
+
+The example `JWT_SECRET=change-me`, `DB_PASSWORD=change-this-db-password`, and `POSTGRES_PASSWORD=change-this-db-password` values are intentionally invalid and must be replaced before the first boot.
+
+The application uses `DB_USER` and `DB_PASSWORD` at runtime. The Postgres container uses `POSTGRES_USER` and `POSTGRES_PASSWORD` during initialization, and it also reads `DB_USER` and `DB_PASSWORD` once to create the app role. Changing any of those values later does not update an already-initialized volume automatically.
+
+The Postgres container now fails before volume initialization if `DB_PASSWORD` or `POSTGRES_PASSWORD` still use a shipped placeholder, or if `DB_USER` matches `POSTGRES_USER`.
+
+The homelab `docker compose` commands below use `--env-file backend/.env.homelab` so Compose can interpolate values from that file across `docker-compose.homelab.yml`. What each container actually receives is still controlled by its explicit `environment:` block: the `db` service gets the init credentials it needs, and the `api` service gets only its runtime app settings.
+
+```bash
+docker compose --env-file backend/.env.homelab -f docker-compose.homelab.yml up -d --build
+```
+
+Verify:
+
+```bash
+curl http://localhost:4000/health
+docker compose --env-file backend/.env.homelab -f docker-compose.homelab.yml ps
+docker compose --env-file backend/.env.homelab -f docker-compose.homelab.yml exec db sh -c 'pg_isready -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+```
+
+Fresh home lab installs do not create an admin user automatically. See `backend/DEPLOYMENT.md` for the one-time admin bootstrap step after registering your first account.
+
+See `backend/DEPLOYMENT.md` for the exact home lab deployment and verification commands.
+
+---
+
+## AWS Deployment
 
 This backend is designed to run as a Docker container on AWS EC2, with PostgreSQL on AWS RDS.
 

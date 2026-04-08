@@ -3,4 +3,5 @@ dist
 coverage
 .git
 .env
+.env.homelab
 npm-debug.log

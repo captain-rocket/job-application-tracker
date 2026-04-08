@@ -169,6 +169,180 @@ Application secrets are not copied from GitHub Actions during deploy. Production
 
 ___
 
+## Home Lab Deployment (Single VM with Docker Compose)
+
+This repository also supports a separate self-hosted deployment target for a single VM.
+
+Deployment model:
+
+- One VM
+- One Docker Compose stack
+- API container and PostgreSQL container on the same host
+- PostgreSQL data stored in a persistent Docker volume
+- API exposed on port 4000
+- PostgreSQL kept internal to the Compose network
+- First boot initializes schema only, with no demo accounts or seed data
+
+This path does not replace the AWS deployment and does not change the existing GitHub Actions flow.
+
+The home lab stack uses `db/init.homelab.sql` for schema-only initialization. The existing `db/init.sql` remains available for local development and seed/demo data.
+
+### Required files
+
+From the repository root:
+
+```bash
+cp backend/.env.homelab.example backend/.env.homelab
+```
+
+Update `backend/.env.homelab` before starting the stack. `DB_USER` and `DB_PASSWORD` are for the lower-privilege application role that the init script creates on first boot. `POSTGRES_USER` and `POSTGRES_PASSWORD` are for the bootstrap admin account created by the Postgres container. `DB_USER` must differ from `POSTGRES_USER`.
+
+The example `JWT_SECRET=change-me`, `DB_PASSWORD=change-this-db-password`, and `POSTGRES_PASSWORD=change-this-db-password` values are intentionally invalid and must be replaced before the first boot:
+
+```env
+NODE_ENV=production
+
+DB_HOST=db
+DB_PORT=5432
+DB_USER=jobtracker_app
+DB_PASSWORD=change-this-db-password
+DB_NAME=jobtracker
+DB_SSL=false
+DB_SSL_REJECT_UNAUTHORIZED=true
+
+POSTGRES_USER=jobtracker_admin
+POSTGRES_PASSWORD=change-this-db-password
+POSTGRES_DB=jobtracker
+
+JWT_SECRET=change-me
+
+PORT=4000
+```
+
+The API uses `DB_USER` and `DB_PASSWORD` at runtime. During the first `docker compose up`, PostgreSQL uses `POSTGRES_USER` and `POSTGRES_PASSWORD` to initialize the database, and it also reads `DB_USER` and `DB_PASSWORD` once to create the lower-privilege application role. Changing any of those values later does not repair an already-initialized volume automatically.
+
+The Postgres container fails before volume initialization if `DB_PASSWORD` or `POSTGRES_PASSWORD` still use a shipped placeholder, or if `DB_USER` matches `POSTGRES_USER`.
+
+The homelab `docker compose` commands below use `--env-file backend/.env.homelab` so Compose can interpolate values from that file across `docker-compose.homelab.yml`. What each container actually receives is still controlled by its explicit `environment:` block: the `db` service gets the init credentials it needs, and the `api` service gets only its runtime app settings.
+
+### Run
+
+From the repository root:
+
+```bash
+docker compose --env-file backend/.env.homelab -f docker-compose.homelab.yml up -d --build
+```
+
+### Verify
+
+Check container status:
+
+```bash
+docker compose --env-file backend/.env.homelab -f docker-compose.homelab.yml ps
+```
+
+Check API health from the VM:
+
+```bash
+curl http://localhost:4000/health
+```
+
+Expected response:
+
+```json
+{"status":true}
+```
+
+This confirms the API process is running. The API now verifies its `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, and `DB_NAME` settings before it starts listening, so a successful response also means those credentials worked during startup. It does not continuously re-check database connectivity after startup.
+
+Check PostgreSQL readiness from inside the database container:
+
+```bash
+docker compose --env-file backend/.env.homelab -f docker-compose.homelab.yml exec db sh -c 'pg_isready -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+```
+
+Expected response:
+
+```text
+127.0.0.1:5432 - accepting connections
+```
+
+Check recent API logs:
+
+```bash
+docker compose --env-file backend/.env.homelab -f docker-compose.homelab.yml logs api --tail 100
+```
+
+Check recent PostgreSQL logs:
+
+```bash
+docker compose --env-file backend/.env.homelab -f docker-compose.homelab.yml logs db --tail 100
+```
+
+### Bootstrap first admin user
+
+Fresh home lab installs start with no users and no admin account. To enable admin routes, first register a normal user through the API:
+
+```bash
+curl -X POST http://localhost:4000/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"<your-admin-email>","password":"<your-strong-password>"}'
+```
+
+Then promote that user to `admin` directly in PostgreSQL:
+
+```bash
+docker compose --env-file backend/.env.homelab -f docker-compose.homelab.yml exec db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "UPDATE users SET role = '\''admin'\'' WHERE email = '\''<your-admin-email>'\'';"'
+```
+
+After the SQL update, authenticate again to get a new JWT with the `admin` role claim. Tokens issued by `/auth/register` before the promotion still contain the original role and will continue to fail admin authorization checks:
+
+```bash
+curl -X POST http://localhost:4000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"<your-admin-email>","password":"<your-strong-password>"}'
+```
+
+Verify the promotion:
+
+```bash
+docker compose --env-file backend/.env.homelab -f docker-compose.homelab.yml exec db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT email, role FROM users;"'
+```
+
+Confirm PostgreSQL persistence volume:
+
+```bash
+docker volume ls | grep homelab-pgdata
+```
+
+Stop the stack without removing the database volume:
+
+```bash
+docker compose --env-file backend/.env.homelab -f docker-compose.homelab.yml down
+```
+
+Restart:
+
+```bash
+docker compose --env-file backend/.env.homelab -f docker-compose.homelab.yml up -d
+```
+
+Re-check health:
+
+```bash
+curl http://localhost:4000/health
+```
+
+Re-check PostgreSQL readiness after restart:
+
+```bash
+docker compose --env-file backend/.env.homelab -f docker-compose.homelab.yml exec db sh -c 'pg_isready -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+```
+
+The `/health` endpoint confirms the API process is running and that the API successfully opened its configured database connection during startup. The `pg_isready` check only confirms PostgreSQL is reachable inside the database container with `POSTGRES_*`; it does not validate the API's `DB_*` credentials, but it does confirm the database container came back cleanly with the persisted volume attached.
+
+___
+
 ## Verify
 
 ### From EC2

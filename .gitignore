@@ -9,6 +9,7 @@ yarn-error.log*
 
 # Environment
 .env
+.env.homelab
 
 # Docker
 pgdata/

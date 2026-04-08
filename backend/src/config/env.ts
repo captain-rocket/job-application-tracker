@@ -82,6 +82,9 @@ function validateJwtSecret(jwtSecret: string, isProduction: boolean) {
     "change-me",
     "changeme",
     "password",
+    "<replace-with-32-character-secret>",
+    "replace-with-32-character-secret",
+    "replace-with-a-32-character-or-longer-secret",
     "secret",
     "test-secret",
   ]);
@@ -89,8 +92,25 @@ function validateJwtSecret(jwtSecret: string, isProduction: boolean) {
     throw new Error("JWT_SECRET is not strong enough for production");
 }
 
+function validateDbPassword(dbPassword: string, isProduction: boolean) {
+  if (!isProduction) return;
+
+  const normalized = dbPassword.trim().toLowerCase();
+  const blockedPasswords = new Set([
+    "<replace-with-rds-password>",
+    "replace-with-rds-password",
+    "change-this-db-password",
+    "changeme",
+    "password",
+  ]);
+
+  if (blockedPasswords.has(normalized))
+    throw new Error("DB_PASSWORD is not strong enough for production");
+}
+
 export function getDbEnv() {
   const { isProduction } = getAppEnv();
+  const dbPassword = getRequiredEnv("DB_PASSWORD");
 
   const sslEnabled = getBooleanEnv("DB_SSL", isProduction);
   const sslRejectUnauthorized = getBooleanEnv(
@@ -98,11 +118,13 @@ export function getDbEnv() {
     true,
   );
 
+  validateDbPassword(dbPassword, isProduction);
+
   return {
     host: getRequiredEnv("DB_HOST"),
     port: getNumberEnv("DB_PORT", 5432),
     user: getRequiredEnv("DB_USER"),
-    password: getRequiredEnv("DB_PASSWORD"),
+    password: dbPassword,
     database: getRequiredEnv("DB_NAME"),
     sslEnabled,
     sslRejectUnauthorized,
