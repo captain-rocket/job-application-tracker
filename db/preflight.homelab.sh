@@ -20,4 +20,8 @@ fi
 reject_placeholder_password "DB_PASSWORD" "$DB_PASSWORD"
 reject_placeholder_password "POSTGRES_PASSWORD" "$POSTGRES_PASSWORD"
 
+if [ "$#" -eq 0 ]; then
+set -- postgres
+fi
+
 exec docker-entrypoint.sh "$@"
