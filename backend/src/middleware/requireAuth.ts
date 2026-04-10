@@ -7,6 +7,17 @@ type JwtPayload = {
   role: "user" | "admin";
 };
 
+function isJwtPayload(value: unknown): value is JwtPayload {
+  if (!value || typeof value !== "object") return false;
+
+  const payload = value as { sub?: unknown; role?: unknown };
+
+  return (
+    typeof payload.sub === "string" &&
+    (payload.role === "user" || payload.role === "admin")
+  );
+}
+
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
   let jwtSecret: string;
   try {
@@ -25,9 +36,9 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
   }
 
   try {
-    const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
+    const decoded = jwt.verify(token, jwtSecret);
 
-    if (!decoded?.sub || !decoded?.role) {
+    if (!isJwtPayload(decoded)) {
       return res.status(401).json({ error: "Invalid token payload" });
     }
 

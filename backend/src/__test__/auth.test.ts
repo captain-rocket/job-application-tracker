@@ -5,6 +5,7 @@ import {
   createTestAppWithDb,
   makeTestRequest,
 } from "./testUtils";
+import request from "supertest";
 
 describe("Auth routes", () => {
   test("POST /auth/register creates a user and returns token", async () => {
@@ -193,6 +194,22 @@ describe("Auth routes", () => {
     });
   });
 
+  test("GET /auth/me returns 401 for unsupported token role", async () => {
+    const app = createAppExpectNoDbCalls("input.invalid");
+    const secret = process.env.JWT_SECRET;
+    if (!secret) throw new Error("JWT_SECRET is not set for test");
+    const token = jwt.sign({ sub: "user-1", role: "superadmin" }, secret, {
+      expiresIn: "5m",
+    });
+
+    const res = await request(app)
+      .get("/auth/me")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(401);
+    expect(res.body).toEqual({ error: "Invalid token payload" });
+  });
+
   test("GET /auth/me returns 401 without token", async () => {
     const app = createTestAppWithDb(async () => ({ rows: [], rowCount: 0 }));
 
@@ -286,6 +303,18 @@ describe("Auth routes", () => {
     expect(res.body).toEqual({
       error: "email is required",
     });
+  });
+
+  test("POST /auth/login returns 400 for malformed JSON", async () => {
+    const app = createAppExpectNoDbCalls("input.invalid");
+
+    const res = await request(app)
+      .post("/auth/login")
+      .set("Content-Type", "application/json")
+      .send('{"email: "me@example.com"}');
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: "Malformed JSON body" });
   });
 
   test("POST /auth/login returns 400 when password is missing", async () => {
