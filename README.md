@@ -2,18 +2,17 @@
 
 A backend-first full-stack project for tracking job applications.
 
-The project is currently focused on building a production-style backend API with authentication, authorization, and domain-specific CRUD operations.
+The project is currently focused on building a backend API with authentication, authorization, and domain-specific CRUD operations.
 
 Frontend development will be introduced in a later phase.
 
 Tech stack:
 
-- Node.js
-- Express (TypeScript)
-- PostgreSQL
-- Docker Compose
-- Jest + Supertest
-- GitHub Actions CI/CD
+- Node.js + Express + TypeScript: typed REST API with small, conventional middleware and route layers
+- PostgreSQL: relational storage for users, tasks and job applications
+- Docker + Docker Compose: reproducible local environment and containerized runtime
+- Jest + Supertest: API-level regression tests for auth, authorization, and CRUD flows
+- GitHub Actions: CI on backend changes plus a manual production deployment workflow
 
 The backend provides authenticated REST endpoints for managing tasks and job applications.
 
@@ -21,25 +20,57 @@ The backend provides authenticated REST endpoints for managing tasks and job app
 
 ## Architecture Overview
 
-Local development runs fully in Docker.
+This project is intentionally backend-first: the API can be exercised today with tools such as curl or Postman, and the same API boundary can serve a React client later.
 
+```text
 Frontend (planned)
         ↓
 Backend API (Express + TypeScript)
         ↓
 PostgreSQL Database
+Request flow:
+Client
+  |
+  v
+Express API (:4000)
+  |- express.json()
+  |- JWT auth / RBAC middleware
+  |- Zod validation middleware
+  |- Router handlers
+  v
+PostgreSQL
+```
 
-Current backend features:
+```text
+Deployment Model
+Local development
+Client
+  |
+  v
+Docker Compose
+  | - api container (Node.js + Express)
+  | - db container (PostgreSQL)
 
-- Dockerized PostgreSQL
-- Dockerized Node/Express API
-- JWT authentication
-- Role-based route protection
-- Task CRUD endpoints
-- Job application CRUD endpoints
-- Development seed script
-- Jest + Supertest API tests
-- CI/CD pipeline via GitHub Actions
+Production (AWS)
+Client
+  |
+  v
+EC2 instance
+  \- Docker container (Node.js Express API)
+      |
+      v
+AWS RDS PostgreSQL (private)
+```
+
+## Request Lifecycle
+
+1. Incoming JSON is parsed by Express.
+2. Protected routes use `requireAuth`; admin-only routes add `requireRole("admin")`.
+3. Route-boundary Zod schemas validate `body`, `params`, and `query` before handler logic runs.
+4. Route handlers execute parameterized queries through the shared PostgreSQL pool.
+5. The centralized error handler turns validation failures, malformed JSON, and unexpected errors into consistent API responses.
+
+On startup, the server validates required environment variables and verifies database connectivity before it starts listening for requests.
 
 ---
 
@@ -117,7 +148,7 @@ The database is initialized automatically via:
 
 `db/init.sql`
 
-Current tables:
+Core tables:
 
 ### users
 
@@ -185,7 +216,7 @@ From the project root:
 cp backend/.env.example backend/.env
 ```
 
-1. Start the services:
+2. Start the services:
 
 ```bash
 docker compose up --build
@@ -430,6 +461,17 @@ Returns a list of users.
 
 ---
 
+## Security and Authentication
+
+- Passwords are hashed with `bcryptjs` before they are stored
+- `/auth/register` and `/auth/login` issue JWTs, and protected routes require `Authorization: Bearer <token>`
+- `requireAuth` verifies the token and attaches authenticated user id and role to the request
+- `requireRole("admin")` protects the admin route boundary
+- Zod validation is applied at the route boundaries for request bodies, route params, and query params
+- Production configuration is environment-driven, and startup rejects weak/default JWT secrets and placeholder production database passwords
+
+---
+
 ## Running Tests
 
 From the backend directory:
@@ -447,34 +489,37 @@ Tests cover:
 - Authorization checks
 - Admin route protection
 
-Tests use a mocked database layer for fast and deterministic execution.
+Tests use a mocked database layer for fast and deterministic execution. Coverage reporting is available with `npm run test:coverage`.
 
 ---
 
 ## Continuous Integration / Deployment
 
-GitHub Actions runs the backend workflow on:
+The backend workflow is intentionally split into CI and manual deployment.
+
+
+CI runs on:
 
 - push to `main` when backend code or `.github/workflows/backend-ci.yml` changes
 - pull requests affecting backend code or `.github/workflows/backend-ci.yml`
-- manual `workflow_dispatch` runs from the Actions tab
+- manual `workflow_dispatch` runs when a human wants a deployable build and deploy run
 
-The workflow performs:
+CI steps:
 
-1. Install dependencies
-2. TypeScript build
-3. Jest test execution
-4. Deploy the backend to EC2 only for manual `workflow_dispatch` runs after CI succeeds
+1. Install dependencies with `npm ci`
+2. Build the backend with `npm run build`
+3. Run the test suite with `npm test`
 
-Deployment uses the existing EC2 + Docker + RDS setup:
+Manual production deployment
 
-- Backend only
-- SSH from GitHub Actions to EC2
-- Runs `git fetch origin main`, `git checkout main` and `git pull --ff-only origin main`
-- Docker rebuild + container restart on EC2
-- Application environment variables stay in `backend/.env` on the server
-
-If build or tests fail, deployment does not run
+- Runs only for `workflow_dispatch` after the CI job succeeds
+- Does not auto-deploy on push or pull request events
+- SSHs from GitHub Actions to EC2
+- Updates the EC2 checkout to `origin/main`
+- Rebuilds the backend to Docker image on the instance
+- Replaces the running job-tracker-api container
+- Verifies `http://localhost:4000/health` on instance
+- Leaves production environment variables in the `backend/.env` on the server
 
 Workflow file:
 
@@ -483,6 +528,17 @@ Workflow file:
 Additional production setup details, required GitHub secrets, and server prerequisites are documented in `backend/DEPLOYMENT.md`.
 
 ---
+
+## Production Discipline
+
+Intentionally focused, with emphasis on production-oriented backend practices:
+
+- route-boundary validation with Zod
+- JWT authentication plus admin-only role checks
+- startup environment validation and database connectivity checks
+- automated API tests with coverage reporting
+- CI separated from manual production deployment
+- environment-based runtime configuration for local and production deployment paths
 
 ## Development Roadmap
 
