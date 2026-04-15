@@ -4,13 +4,14 @@ import { createDbPool } from "../config/db";
 /**
  * Seed script goals:
  * - Create (or update) a known admin user + normal user
- * - Insert some tasks for each user
- * - Be safe to re-run (idempotent-ish)
+ * - Insert a deterministic set of tasks for each user
+ * - Insert a deterministic set of application records for the standard user
+ * - Be safe to re-run for local development verification
  *
  * How it works:
  * - Upsert users by email (so re-running doesn't create duplicates)
- * - Delete tasks for those users (so the seed set is consistent)
- * - Insert a small set of tasks
+ * - Delete seeded tasks for each user and reinsert them
+ * - Delete existing applications for the seeded standard user and reinsert them
  */
 
 async function main() {
@@ -22,12 +23,42 @@ async function main() {
       password: "AdminPass123!",
       role: "admin" as const,
       tasks: ["Review user list", "Check failed jobs", "Audit task ownership"],
+      applications: [],
     },
     {
       email: "user@example.com",
       password: "UserPass123!",
       role: "user" as const,
       tasks: ["Apply to 3 roles", "Refactor tests", "Push updates to GitHub"],
+      applications: [
+        {
+          company: "North Field Labs",
+          job_title: "Frontend Engineer",
+          status: "saved",
+          job_url: null,
+          location: "Remote",
+          notes: "Local fronted seed: saved application",
+          applied_at: null,
+        },
+        {
+          company: "Sans Tech Systems",
+          job_title: "Full Stack Developer",
+          status: "applied",
+          job_url: "https://jobs.sanstechsystems.example/full-stack-developer",
+          location: "Columbus, OH",
+          notes: "Local frontend seed: applied application",
+          applied_at: "2026-04-10T14:30:00.000Z",
+        },
+        {
+          company: "Target AI",
+          job_title: "Software Engineer",
+          status: "interviewing",
+          job_url: "https://careers.target-ai.example/software-engineer",
+          location: null,
+          notes: "Local frontend seed: interviewing application",
+          applied_at: "2026-04-02T09:00:00.000Z",
+        },
+      ],
     },
   ];
 
@@ -65,6 +96,44 @@ async function main() {
           `,
           [userId, title],
         );
+      }
+
+      if (u.applications.length > 0) {
+        await client.query(
+          `
+          DELETE FROM applications
+          WHERE user_id = $1
+          `,
+          [userId],
+        );
+
+        for (const application of u.applications) {
+          await client.query(
+            `
+            INSERT INTO applications (
+            user_id,
+            company,
+            job_title,
+            status,
+            job_url,
+            location,
+            notes,
+            applied_at
+          )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            `,
+            [
+              userId,
+              application.company,
+              application.job_title,
+              application.status,
+              application.job_url,
+              application.location,
+              application.notes,
+              application.applied_at,
+            ],
+          );
+        }
       }
 
       console.log(`[seed] upserted user: ${userRow.email} (${userRow.role})`);

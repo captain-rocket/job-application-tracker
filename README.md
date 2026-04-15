@@ -373,6 +373,9 @@ UserPass123!
 
 These accounts allow testing authenticated and admin routes.
 
+The standard user also gets 3 deterministic application rows for local frontend verification.
+Returning the seed script refreshes those rows without changing the seeded credentials.
+
 ---
 
 ## API Routes
