@@ -1,0 +1,109 @@
+:root {
+  --colorBg: #121212;
+  --colorSurface: #1e1e1e;
+  --colorBorder: #343434;
+  --colorText: #f5f5f5;
+  --colorMuted: #a1a1a1;
+  --colorInputBg: #101010;
+  --colorInputBorder: #4b5563;
+
+  --colorPrimaryBg: #3ecf8e;
+  --colorPrimaryText: #08110c;
+
+  --colorSecondaryBg: #252525;
+  --colorSecondaryText: #f5f5f5;
+  --colorSecondaryBorder: #4b5563;
+
+  --colorErrorBg: #3a1616;
+  --colorErrorText: #facaca;
+  --colorErrorBorder: #7f1d1d;
+}
+
+:root {
+  background: var(--colorBg);
+  color: var(--colorText);
+  font-family: Arial, Helvetica, sans-serif;
+  line-height: 1.5;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+h1,
+h2,
+p {
+  margin-top: 0;
+}
+
+.pageShell {
+  width: min(100%, 1120px);
+  margin: 0 auto;
+  padding: 24px 16px 40px;
+}
+
+.surfacePanel {
+  background: var(--colorSurface);
+  border: 1px solid var(--colorBorder);
+  border-radius: 8px;
+}
+
+input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--colorInputBorder);
+  border-radius: 6px;
+  background: var(--colorInputBg);
+  color: #f5f5f5;
+}
+
+.primaryButton,
+.secondaryButton {
+  border-radius: 6px;
+  padding: 10px 14px;
+}
+
+.primaryButton {
+  width: 100%;
+  background: var(--colorPrimaryBg);
+  color: var(--colorPrimaryText);
+  border: 1px solid var(--colorPrimaryBg);
+}
+
+.secondaryButton {
+  background: var(--colorSecondaryBg);
+  color: var(--colorSecondaryText);
+  border: 1px solid var(--colorSecondaryBorder);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.statusMessage {
+  margin: 0;
+  padding: 12px 0;
+}
+
+.errorMessage {
+  margin: 0 0 16px;
+  padding: 12px;
+  background: var(--colorErrorBg);
+  border: 1px solid var(--colorErrorBorder);
+  border-radius: 6px;
+  color: var(--colorErrorText);
+}

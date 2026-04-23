@@ -1,0 +1,21 @@
+.authLayout {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.authPanel {
+  width: min(100%, 420px);
+  padding: 24px;
+}
+
+.formHint {
+  color: var(--colorMuted);
+}
+
+.formRow {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 16px;
+}
