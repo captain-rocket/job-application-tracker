@@ -49,6 +49,17 @@ export type Application = {
   updated_at: string;
 };
 
+export type CreateApplicationRequestBody = {
+  company: string;
+  job_title: string;
+  status?: ApplicationStatus;
+  applied_at: string | null;
+};
+
+export type CreateApplicationResponse = {
+  application: Application;
+};
+
 export type Pagination = {
   page: number;
   limit: number;

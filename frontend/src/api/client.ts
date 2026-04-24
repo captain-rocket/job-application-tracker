@@ -1,5 +1,7 @@
 import {
   ApiErrorResponse,
+  CreateApplicationRequestBody,
+  CreateApplicationResponse,
   ListApplicationsResponse,
   LoginRequestBody,
   LoginResponse,
@@ -93,5 +95,16 @@ export function getMe(token: string) {
 export function listApplications(token: string) {
   return request<ListApplicationsResponse>("/applications?page=1&limit=20", {
     token,
+  });
+}
+
+export function createApplication(
+  token: string,
+  body: CreateApplicationRequestBody,
+) {
+  return request<CreateApplicationResponse>("/applications", {
+    method: "POST",
+    token,
+    body,
   });
 }

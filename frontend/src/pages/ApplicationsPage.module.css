@@ -13,6 +13,51 @@
   flex-wrap: wrap;
 }
 
+.controlPanel {
+  margin-bottom: 24px;
+  padding: 20px;
+}
+
+.controlPanel h2 {
+  margin-bottom: 8px;
+}
+
+.formHint {
+  margin-bottom: 16px;
+  color: var(--colorMuted);
+}
+
+.createForm {
+  display: grid;
+  gap: 16px;
+}
+
+.formGrid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.formRow {
+  display: grid;
+  gap: 8px;
+}
+
+.formControl {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--colorInputBorder);
+  border-radius: 6px;
+  background-color: var(--colorInputBg);
+  color: var(--colorText);
+  font: inherit;
+}
+
+.submitButton {
+  width: auto;
+  justify-self: start;
+}
+
 .applicationList {
   list-style: none;
   margin: 0;
