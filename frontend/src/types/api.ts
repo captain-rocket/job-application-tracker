@@ -60,6 +60,17 @@ export type CreateApplicationResponse = {
   application: Application;
 };
 
+export type UpdateApplicationRequestBody = {
+  company?: string;
+  job_title?: string;
+  status?: ApplicationStatus;
+  applied_at?: string | null;
+};
+
+export type UpdateApplicationResponse = {
+  application: Application;
+};
+
 export type Pagination = {
   page: number;
   limit: number;

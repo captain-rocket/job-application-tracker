@@ -72,8 +72,28 @@
   padding: 16px;
 }
 
-.applicationItem h2 {
+.applicationItemHeader {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
   margin-bottom: 12px;
+}
+
+.applicationItemHeader h2 {
+  margin-bottom: 0px;
+}
+
+.editForm {
+  display: grid;
+  gap: 12px;
+}
+
+.editActions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .eyebrow,

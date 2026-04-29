@@ -6,10 +6,12 @@ import {
   LoginRequestBody,
   LoginResponse,
   MeResponse,
+  UpdateApplicationResponse,
+  UpdateApplicationRequestBody,
 } from "../types/api.js";
 
 type RequestOptions = {
-  method?: "GET" | "POST";
+  method?: "GET" | "POST" | "PATCH";
   body?: unknown;
   token?: string;
   handleUnauthorized?: boolean;
@@ -104,6 +106,18 @@ export function createApplication(
 ) {
   return request<CreateApplicationResponse>("/applications", {
     method: "POST",
+    token,
+    body,
+  });
+}
+
+export function updateApplication(
+  token: string,
+  applicationId: number,
+  body: UpdateApplicationRequestBody,
+) {
+  return request<UpdateApplicationResponse>(`/applications/${applicationId}`, {
+    method: "PATCH",
     token,
     body,
   });

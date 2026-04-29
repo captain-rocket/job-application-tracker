@@ -1,12 +1,20 @@
-import { useEffect, useState, type SubmitEvent, useRef } from "react";
+import { useEffect, useRef, useState, type SubmitEvent } from "react";
 import { useNavigate } from "react-router";
-import { ApiError, createApplication, listApplications } from "../api/client";
+import { toDateInputValue } from "../utils/applicationDate";
+import {
+  ApiError,
+  createApplication,
+  listApplications,
+  updateApplication,
+} from "../api/client";
 import { useAuth } from "../auth/AuthProvider";
 import type {
   Application,
   ApplicationStatus,
   CreateApplicationRequestBody,
+  UpdateApplicationRequestBody,
 } from "../types/api";
+import { ApplicationListItem, type EditFormState } from "./ApplicationListItem";
 import styles from "./ApplicationsPage.module.css";
 
 const APPLICATION_STATUS_OPTIONS: ApplicationStatus[] = [
@@ -18,24 +26,31 @@ const APPLICATION_STATUS_OPTIONS: ApplicationStatus[] = [
   "withdrawn",
 ];
 
-function formatAppliedAt(appliedAt: string | null) {
-  if (!appliedAt) return "Not set";
-
-  const date = new Date(appliedAt);
-
-  if (Number.isNaN(date.getTime())) return appliedAt;
-
-  return date.toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-}
-
 function toAppliedAtRequestValue(value: string) {
   if (!value) return null;
 
   return `${value}T12:00:00.000Z`;
+}
+
+function buildUpdateApplicationRequestBody(
+  application: Application,
+  editForm: EditFormState,
+): UpdateApplicationRequestBody | null {
+  const body: UpdateApplicationRequestBody = {};
+  if (editForm.company !== application.company) {
+    body.company = editForm.company;
+  }
+  if (editForm.jobTitle !== application.job_title) {
+    body.job_title = editForm.jobTitle;
+  }
+  if (editForm.status !== application.status) {
+    body.status = editForm.status;
+  }
+  if (editForm.appliedAt !== toDateInputValue(application.applied_at)) {
+    body.applied_at = toAppliedAtRequestValue(editForm.appliedAt);
+  }
+
+  return Object.keys(body).length > 0 ? body : null;
 }
 
 export function ApplicationsPage() {
@@ -51,6 +66,12 @@ export function ApplicationsPage() {
   const [appliedAt, setAppliedAt] = useState("");
   const [createError, setCreateError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editingApplicationId, setEditingApplicationId] = useState<
+    number | null
+  >(null);
+  const [editForm, setEditForm] = useState<EditFormState | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [updateError, setUpdateError] = useState<string | null>(null);
 
   const getNextLoadRequestId = (): number => {
     return ++requestId.current;
@@ -127,6 +148,80 @@ export function ApplicationsPage() {
     }
 
     void loadApplications(token);
+  }
+
+  function handleStartEdit(application: Application) {
+    setEditingApplicationId(application.id);
+
+    setEditForm({
+      company: application.company,
+      jobTitle: application.job_title,
+      status: application.status,
+      appliedAt: toDateInputValue(application.applied_at),
+    });
+    setUpdateError(null);
+  }
+
+  function handleCancelEdit() {
+    setEditingApplicationId(null);
+    setEditForm(null);
+    setUpdateError(null);
+  }
+
+  function handleEditFormChange(updates: Partial<EditFormState>) {
+    setEditForm((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        ...updates,
+      };
+    });
+  }
+
+  async function handleUpdateApplication(
+    event: SubmitEvent<HTMLFormElement>,
+    applicationId: number,
+  ) {
+    event.preventDefault();
+
+    if (!token || !editForm) return;
+
+    const application = applications.find((item) => item.id === applicationId);
+
+    if (!application) return;
+
+    const body = buildUpdateApplicationRequestBody(application, editForm);
+
+    if (!body) {
+      handleCancelEdit();
+      return;
+    }
+
+    setUpdateError(null);
+    setIsSaving(true);
+
+    let didUpdate = false;
+
+    try {
+      await updateApplication(token, applicationId, body);
+      didUpdate = true;
+      setEditingApplicationId(null);
+      setEditForm(null);
+      setUpdateError(null);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) return;
+
+      setUpdateError(
+        error instanceof Error ? error.message : "Unable to update application",
+      );
+      return;
+    } finally {
+      setIsSaving(false);
+    }
+
+    if (didUpdate) {
+      void loadApplications(token);
+    }
   }
 
   function handleLogout() {
@@ -243,29 +338,23 @@ export function ApplicationsPage() {
       ) : (
         <ul className={styles.applicationList}>
           {applications.map((application) => (
-            <li
+            <ApplicationListItem
+              application={application}
               key={application.id}
-              className={`surfacePanel ${styles.applicationItem}`}
-            >
-              <h2>{application.company}</h2>
-
-              <dl className={styles.applicationDetails}>
-                <div>
-                  <dt>Job title</dt>
-                  <dd>{application.job_title}</dd>
-                </div>
-
-                <div>
-                  <dt>Status</dt>
-                  <dd>{application.status}</dd>
-                </div>
-
-                <div>
-                  <dt>Applied At</dt>
-                  <dd>{formatAppliedAt(application.applied_at)}</dd>
-                </div>
-              </dl>
-            </li>
+              isEditing={editingApplicationId === application.id}
+              editForm={
+                editingApplicationId === application.id ? editForm : null
+              }
+              isSaving={isSaving}
+              updateError={
+                editingApplicationId === application.id ? updateError : null
+              }
+              statusOptions={APPLICATION_STATUS_OPTIONS}
+              onStartEdit={handleStartEdit}
+              onCancelEdit={handleCancelEdit}
+              onSubmit={handleUpdateApplication}
+              onEditFormChange={handleEditFormChange}
+            />
           ))}
         </ul>
       )}
