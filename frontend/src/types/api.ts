@@ -71,6 +71,10 @@ export type UpdateApplicationResponse = {
   application: Application;
 };
 
+export type DeleteApplicationResponse = {
+  message: string;
+};
+
 export type Pagination = {
   page: number;
   limit: number;

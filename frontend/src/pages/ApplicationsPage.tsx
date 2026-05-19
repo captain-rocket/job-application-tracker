@@ -4,6 +4,7 @@ import { toDateInputValue } from "../utils/applicationDate";
 import {
   ApiError,
   createApplication,
+  deleteApplication,
   listApplications,
   updateApplication,
 } from "../api/client";
@@ -72,6 +73,11 @@ export function ApplicationsPage() {
   const [editForm, setEditForm] = useState<EditFormState | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
+
+  const [deletingApplicationId, setDeletingApplicationId] = useState<
+    number | null
+  >(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const getNextLoadRequestId = (): number => {
     return ++requestId.current;
@@ -224,6 +230,36 @@ export function ApplicationsPage() {
     }
   }
 
+  async function handleDeleteApplication(application: Application) {
+    if (!token) return;
+
+    const shouldDelete = window.confirm(
+      `Delete application for ${application.company}?`,
+    );
+
+    if (!shouldDelete) return;
+
+    setDeleteError(null);
+    setDeletingApplicationId(application.id);
+
+    let didDelete = false;
+
+    try {
+      await deleteApplication(token, application.id);
+      didDelete = true;
+      setDeleteError(null);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) return;
+
+      setDeleteError(
+        error instanceof Error ? error.message : "Unable to delete application",
+      );
+    } finally {
+      setDeletingApplicationId(null);
+    }
+    if (didDelete) void loadApplications(token);
+  }
+
   function handleLogout() {
     logout();
     navigate("/login", { replace: true });
@@ -327,6 +363,12 @@ export function ApplicationsPage() {
         </form>
       </section>
 
+      {deleteError ? (
+        <p role="alert" className="errorMessage">
+          {deleteError}
+        </p>
+      ) : null}
+
       {isLoading ? (
         <p className="statusMessage">Loading applications</p>
       ) : loadError ? (
@@ -346,12 +388,14 @@ export function ApplicationsPage() {
                 editingApplicationId === application.id ? editForm : null
               }
               isSaving={isSaving}
+              isDeleting={deletingApplicationId === application.id}
               updateError={
                 editingApplicationId === application.id ? updateError : null
               }
               statusOptions={APPLICATION_STATUS_OPTIONS}
               onStartEdit={handleStartEdit}
               onCancelEdit={handleCancelEdit}
+              onDelete={handleDeleteApplication}
               onSubmit={handleUpdateApplication}
               onEditFormChange={handleEditFormChange}
             />

@@ -15,10 +15,12 @@ type ApplicationListItemProps = {
   isEditing: boolean;
   editForm: EditFormState | null;
   isSaving: boolean;
+  isDeleting: boolean;
   updateError: string | null;
   statusOptions: ApplicationStatus[];
   onStartEdit: (application: Application) => void;
   onCancelEdit: () => void;
+  onDelete: (application: Application) => void;
   onSubmit: (
     event: SubmitEvent<HTMLFormElement>,
     applicationId: number,
@@ -31,10 +33,12 @@ export function ApplicationListItem({
   isEditing,
   editForm,
   isSaving,
+  isDeleting,
   updateError,
   statusOptions,
   onStartEdit,
   onCancelEdit,
+  onDelete,
   onSubmit,
   onEditFormChange,
 }: ApplicationListItemProps) {
@@ -43,14 +47,24 @@ export function ApplicationListItem({
       <div className={styles.applicationItemHeader}>
         <h2>{application.company}</h2>
         {isEditing ? null : (
-          <button
-            type="button"
-            className="secondaryButton"
-            onClick={() => onStartEdit(application)}
-            disabled={isSaving}
-          >
-            Edit
-          </button>
+          <>
+            <button
+              type="button"
+              className="secondaryButton"
+              onClick={() => onStartEdit(application)}
+              disabled={isSaving || isDeleting}
+            >
+              Edit
+            </button>
+            <button
+              type="button"
+              className="secondaryButton"
+              onClick={() => void onDelete(application)}
+              disabled={isSaving || isDeleting}
+            >
+              {isDeleting ? "Deleting..." : "Delete"}
+            </button>
+          </>
         )}
       </div>
 

@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useAuth } from "../auth/AuthProvider";
 import {
   createApplication,
+  deleteApplication,
   listApplications,
   updateApplication,
 } from "../api/client";
@@ -38,12 +39,14 @@ vi.mock("../api/client", () => ({
     }
   },
   createApplication: vi.fn(),
+  deleteApplication: vi.fn(),
   listApplications: vi.fn(),
   updateApplication: vi.fn(),
 }));
 
 const mockedUseAuth = vi.mocked(useAuth);
 const mockedCreateApplication = vi.mocked(createApplication);
+const mockedDeleteApplication = vi.mocked(deleteApplication);
 const mockedListApplications = vi.mocked(listApplications);
 const mockedUpdateApplication = vi.mocked(updateApplication);
 
@@ -100,7 +103,10 @@ async function renderPage(application: Application) {
 describe("ApplicationsPage update flow", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-
+    vi.stubGlobal(
+      "confirm",
+      vi.fn(() => true),
+    );
     mockedUseAuth.mockReturnValue({
       token: "token-123",
       user: {
@@ -116,9 +122,13 @@ describe("ApplicationsPage update flow", () => {
     mockedCreateApplication.mockResolvedValue({
       application: createTestApplication({ id: 99 }),
     });
+    mockedDeleteApplication.mockResolvedValue({
+      message: "Application deleted",
+    });
   });
 
   afterEach(() => {
+    vi.unstubAllGlobals();
     cleanup();
   });
 
@@ -228,6 +238,89 @@ describe("ApplicationsPage update flow", () => {
     ).toBeTruthy();
   });
 
+  it("does not delete when confirmation is canceled", async () => {
+    const card = await renderPage(createTestApplication());
+
+    vi.mocked(window.confirm).mockReturnValue(false);
+
+    fireEvent.click(card.getByRole("button", { name: "Delete" }));
+
+    expect(window.confirm).toHaveBeenCalledWith(
+      "Delete application for Data Stack One?",
+    );
+    expect(mockedDeleteApplication).not.toHaveBeenCalled();
+    expect(mockedListApplications).toHaveBeenCalledTimes(1);
+  });
+
+  it("reloads the applications list after a successful delete", async () => {
+    const application = createTestApplication();
+
+    mockedListApplications
+      .mockResolvedValueOnce(createListResponse([application]))
+      .mockResolvedValueOnce(createListResponse([]));
+
+    render(<ApplicationsPage />);
+
+    const heading = await screen.findByRole("heading", {
+      name: application.company,
+      level: 2,
+    });
+    const applicationCard = heading.closest("li");
+
+    if (!applicationCard) throw new Error("Application card not found");
+
+    const card = within(applicationCard);
+
+    fireEvent.click(card.getByRole("button", { name: "Delete" }));
+
+    await waitFor(async () => {
+      expect(mockedDeleteApplication).toHaveBeenLastCalledWith("token-123", 1);
+      expect(mockedListApplications).toHaveBeenCalledTimes(2);
+    });
+
+    expect(await screen.findByText("No applications found.")).toBeTruthy();
+  });
+
+  it("disables delete and edit actions while delete is in flight", async () => {
+    const application = createTestApplication();
+    const card = await renderPage(application);
+
+    let resolveDelete: ((value: { message: string }) => void) | undefined;
+
+    mockedDeleteApplication.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveDelete = resolve;
+        }),
+    );
+
+    fireEvent.click(card.getByRole("button", { name: "Delete" }));
+
+    await waitFor(async () => {
+      expect(mockedDeleteApplication).toHaveBeenCalledTimes(1);
+      expect(
+        (card.getByRole("button", { name: "Edit" }) as HTMLButtonElement)
+          .disabled,
+      ).toBe(true);
+      expect(
+        (
+          card.getByRole("button", {
+            name: "Deleting...",
+          }) as HTMLButtonElement
+        ).disabled,
+      ).toBe(true);
+    });
+
+    if (!resolveDelete)
+      throw new Error("Expected delete request to be pending");
+
+    resolveDelete({ message: "Application deleted" });
+
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: "Deleting..." })).toBeNull();
+    });
+  });
+
   it("disables the edit form while a save is in flight", async () => {
     const application = createTestApplication();
     const updatedApplication = createTestApplication({
@@ -286,5 +379,18 @@ describe("ApplicationsPage update flow", () => {
     await waitFor(() => {
       expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
     });
+  });
+
+  it("shows a delete error when the delete request fails", async () => {
+    const card = await renderPage(createTestApplication());
+
+    mockedDeleteApplication.mockRejectedValue(new Error("Delete failed"));
+
+    fireEvent.click(card.getByRole("button", { name: "Delete" }));
+
+    const alert = await screen.findByRole("alert");
+
+    expect(alert.textContent).toBe("Delete failed");
+    expect(mockedListApplications).toHaveBeenCalledTimes(1);
   });
 });

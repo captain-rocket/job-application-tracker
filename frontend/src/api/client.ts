@@ -2,6 +2,7 @@ import {
   ApiErrorResponse,
   CreateApplicationRequestBody,
   CreateApplicationResponse,
+  DeleteApplicationResponse,
   ListApplicationsResponse,
   LoginRequestBody,
   LoginResponse,
@@ -11,7 +12,7 @@ import {
 } from "../types/api.js";
 
 type RequestOptions = {
-  method?: "GET" | "POST" | "PATCH";
+  method?: "GET" | "POST" | "PATCH" | "DELETE";
   body?: unknown;
   token?: string;
   handleUnauthorized?: boolean;
@@ -108,6 +109,13 @@ export function createApplication(
     method: "POST",
     token,
     body,
+  });
+}
+
+export function deleteApplication(token: string, applicationId: number) {
+  return request<DeleteApplicationResponse>(`/applications/${applicationId}`, {
+    method: "DELETE",
+    token,
   });
 }
 
