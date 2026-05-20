@@ -1,29 +1,48 @@
 # Job Application Tracker
 
-A backend-first full-stack project for tracking job applications.
+A full-stack job application tracker with deployed backend API and local React frontend.
 
-The project is currently focused on building a backend API with authentication, authorization, and domain-specific CRUD operations.
+Current status:
 
-Frontend development will be introduced in a later phase.
+- Backend API is deployed on AWS EC2 with PostgreSQL on AWS RDS
+- Backend can also run on a home lab VM with Docker Compose
+- Frontend exists in `frontend/` and currently runs locally with Vite
+- Frontend production deployment is not implemented yet
 
-Tech stack:
+Backend stack:
 
 - Node.js + Express + TypeScript: typed REST API with small, conventional middleware and route layers
 - PostgreSQL: relational storage for users, tasks and job applications
 - Docker + Docker Compose: reproducible local environment and containerized runtime
+- JWT authentication, RBAC and Zod route-boundary validation
 - Jest + Supertest: API-level regression tests for auth, authorization, and CRUD flows
 - GitHub Actions: CI on backend changes plus a manual production deployment workflow
 
-The backend provides authenticated REST endpoints for managing tasks and job applications.
+Frontend stack:
+
+- React + TypeScript
+- Vite
+- React Router
+- Native `fetch`
+- Vitest + React Testing Library + jsdom
+
+Implemented features:
+
+- Login and JWT-backed session storage
+- Auth hydration from `localStorage`
+- Protected `/applications` frontend route
+- Application list, create, edit, delete and logout flows in the frontend
+- Backend validation, authentication and admin-only RBAC route protection
+- Backend and frontend automated tests
 
 ---
 
 ## Architecture Overview
 
-This project is intentionally backend-first: the API can be exercised today with tools such as curl or Postman, and the same API boundary can serve a React client later.
+The backend exposes authenticated REST routes for users, tasks and job applications. The React frontend consumes application routes for the current job application CRUD workflow.
 
 ```text
-Frontend (planned)
+Frontend (React + TypeScript + Vite)
         ↓
 Backend API (Express + TypeScript)
         ↓
@@ -44,13 +63,18 @@ PostgreSQL
 ```text
 Deployment Model
 Local development
-Client
+Client/browser
   |
+  v
+Vite dev server (:5173, outside Docker)
+  |- serves React frontend
+  |- proxies /auth and /applications
   v
 Docker Compose
   | - api container (Node.js + Express)
   | - db container (PostgreSQL)
-
+  |
+  v
 Production (AWS)
 Client
   |
@@ -61,6 +85,10 @@ EC2 instance
       v
 AWS RDS PostgreSQL (private)
 ```
+
+Frontend production hosting is not yet configured.
+
+In local development, the frontend calls backend routes without an `/api` prefix. Vite proxies `/auth` and `/applications` requests to `http://localhost:4000`.
 
 ## Request Lifecycle
 
@@ -83,60 +111,47 @@ job-application-tracker/
 ├── .github/
 │   └── workflows/
 │       └── backend-ci.yml
-├── backend/
-│   ├── src/
-│   │   ├── __test__/
-│   │   │   ├── admin.test.ts
-│   │   │   ├── applications.test.ts
-│   │   │   ├── auth.test.ts
-│   │   │   ├── db.test.ts
-│   │   │   ├── env.test.ts
-│   │   │   ├── setupEnv.ts
-│   │   │   ├── tasks.test.ts
-│   │   │   ├── testUtils.ts
-│   │   │   └── tsconfig.json
-│   │   ├── config/
-│   │   │   ├── db.ts
-│   │   │   └── env.ts
-│   │   ├── middleware/
-│   │   │   ├── errorHandler.ts
-│   │   │   ├── index.ts
-│   │   │   ├── requireAuth.ts
-│   │   │   ├── requireRole.ts
-│   │   │   └── validate.ts
-│   │   ├── routes/
-│   │   │   ├── admin.routes.ts
-│   │   │   ├── applications.routes.ts
-│   │   │   ├── auth.routes.ts
-│   │   │   ├── health.routes.ts
-│   │   │   ├── index.ts
-│   │   │   └── tasks.routes.ts
-│   │   ├── schemas/
-│   │   │   ├── applications.schemas.ts
-│   │   │   ├── auth.schemas.ts
-│   │   │   └── task.schemas.ts
-│   │   ├── scripts/
-│   │   │   └── seed.ts
-│   │   ├── types/
-│   │   │   └── express.d.ts
-│   │   ├── utils/
-│   │   │   └── helpers.ts
-│   │   ├── app.ts
-│   │   └── server.ts
-│   ├── .env.example
-│   ├── .env.homelab.example
-│   ├── DEPLOYMENT.md
-│   ├── Dockerfile
-│   ├── jest.config.js
-│   ├── package.json
-│   ├── tsconfig.json
-│   └── tsconfig.test.json
-├── db/
-│   ├── init.homelab.sql
-│   ├── init.sql
-│   └── preflight.homelab.sh
+├── backend
+│   ├── DEPLOYMENT.md
+│   ├── Dockerfile
+│   ├── eslint.config.js
+│   ├── jest.config.js
+│   ├── package-lock.json
+│   ├── package.json
+│   ├── src
+│   │   ├── __test__
+│   │   ├── app.ts
+│   │   ├── config
+│   │   ├── middleware
+│   │   ├── routes
+│   │   ├── schemas
+│   │   ├── scripts
+│   │   ├── server.ts
+│   │   ├── types
+│   │   └── utils
+│   ├── tsconfig.json
+│   └── tsconfig.test.json
+├── db
+│   ├── init.homelab.sql
+│   ├── init.sql
+│   └── preflight.homelab.sh
 ├── docker-compose.homelab.yml
 ├── docker-compose.yml
+├── frontend
+│   ├── index.html
+│   ├── package-lock.json
+│   ├── package.json
+│   ├── src
+│   │   ├── api
+│   │   ├── App.tsx
+│   │   ├── auth
+│   │   ├── main.tsx
+│   │   ├── pages
+│   │   ├── styles.css
+│   │   ├── types
+│   │   └── utils
+│   ├── tsconfig.json
+│   └── vite.config.ts
 └── README.md
 ```
 
@@ -208,6 +223,10 @@ CREATE TABLE applications (
 
 ## Running Locally
 
+The backend and PostgreSQL run through Docker Compose. The frontend currently runs outside Docker with Vite.
+
+### Backend API and PostgreSQL
+
 From the project root:
 
 1. Create a local environment file for the backend:
@@ -256,15 +275,42 @@ For Docker Compose, the database connection values are supplied by `docker-compo
 
 ---
 
+### Frontend
+
+From the project root:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The Vite development server will be available at:
+
+<http://localhost:5173>
+
+Useful front end commands from `frontend/`
+
+```bash
+npm run build
+npm test
+```
+
+The frontend calls backend routes without `/api` prefix. During local development, `frontend/vite.config.ts` proxies `/auth` and `/applications` to the backend `http://localhost:4000`
+
+---
+
 ## Deployment Targets
 
 ### AWS deployment
 
-The production AWS deployment path remains:
+The backend production AWS deployment path is implemented:
 
 - API container on EC2
 - PostgreSQL on AWS RDS
 - GitHub Actions manual deploy to EC2
+
+The frontend is not deployed yet and currently runs locally only.
 
 See `backend/DEPLOYMENT.md` for the full AWS deployment instructions.
 
@@ -314,7 +360,7 @@ See `backend/DEPLOYMENT.md` for the exact home lab deployment and verification c
 
 ## AWS Deployment
 
-This backend is designed to run as a Docker container on AWS EC2, with PostgreSQL on AWS RDS.
+The backend runs as a Docker container on AWS EC2, with PostgreSQL on AWS RDS.
 
 ### Build
 
@@ -348,6 +394,7 @@ See:
 - Production uses external PostgreSQL (RDS)
 - Docker Compose is not used in production
 - Secrets must be provided via environment variables
+- Frontend production hosting is not yet configured.
 
 ---
 
@@ -374,7 +421,7 @@ UserPass123!
 These accounts allow testing authenticated and admin routes.
 
 The standard user also gets 3 deterministic application rows for local frontend verification.
-Returning the seed script refreshes those rows without changing the seeded credentials.
+Rerunning the seed script refreshes those rows without changing the seeded credentials.
 
 ---
 
@@ -471,13 +518,15 @@ Returns a list of users.
 - `requireAuth` verifies the token and attaches authenticated user id and role to the request
 - `requireRole("admin")` protects the admin route boundary
 - Zod validation is applied at the route boundaries for request bodies, route params, and query params
+- The frontend stores the JWT in `localStorage` and hydrates the session on page load
+- The `/applications` frontend route is protected by client-side auth state
 - Production configuration is environment-driven, and startup rejects weak/default JWT secrets and placeholder production database passwords
 
 ---
 
 ## Running Tests
 
-From the backend directory:
+Backend tests use Jest and SuperTest. From the backend directory:
 
 ```bash
 npm test
@@ -493,6 +542,14 @@ Tests cover:
 - Admin route protection
 
 Tests use a mocked database layer for fast and deterministic execution. Coverage reporting is available with `npm run test:coverage`.
+
+Frontend tests use Vitest, React Testing Library and jsdom. From the frontend directory:
+
+```bash
+npm test
+```
+
+Current frontend coverage focuses on the applications CRUD page behavior, including update and delete flows.
 
 ---
 
@@ -530,6 +587,8 @@ Workflow file:
 
 Additional production setup details, required GitHub secrets, and server prerequisites are documented in `backend/DEPLOYMENT.md`.
 
+The frontend currently has local build and test scripts, but is not part of the production deployment path yet.
+
 ---
 
 ## Production Discipline
@@ -542,15 +601,21 @@ Intentionally focused, with emphasis on production-oriented backend practices:
 - automated API tests with coverage reporting
 - CI separated from manual production deployment
 - environment-based runtime configuration for local and production deployment paths
+- local React frontend for authenticated application CRUD
+- frontend regression tests for key CRUD interactions
 
 ## Development Roadmap
 
 Completed recently:
 
+- Backend API with authentication, authorization, validation, and application CRUD
 - AWS EC2 + RDS deployment
 - Production environment configuration
 - Live backend health check validation on AWS
 
 Upcoming phases:
 
-- React frontend
+- Frontend deployment
+- Frontend polish
+- Expanded frontend test coverage
+- Pagination and filter UI
