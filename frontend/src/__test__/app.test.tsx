@@ -9,6 +9,7 @@ import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
 import {
+  ApiError,
   createApplication,
   deleteApplication,
   getMe,
@@ -231,6 +232,136 @@ describe("App auth and routing", () => {
 
     expect(mockedGetMe).toHaveBeenCalledWith("stored-token-123");
     expect(mockedListApplications).toHaveBeenCalledWith("stored-token-123");
+  });
+
+  it("clears the stored token and redirects to login when an authenticated user logs out", async () => {
+    const application = createTestApplication();
+
+    localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, "stored-token-123");
+    mockedGetMe.mockResolvedValue(createMeResponse());
+    mockedListApplications.mockResolvedValue(createListResponse([application]));
+
+    renderApp("/applications");
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "Applications",
+        level: 1,
+      }),
+    ).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Log out" }));
+
+    await waitFor(() => {
+      expect(localStorage.getItem(AUTH_TOKEN_STORAGE_KEY)).toBeNull();
+    });
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "Sign In",
+        level: 1,
+      }),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole("heading", {
+        name: "Applications",
+        level: 1,
+      }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("heading", {
+        name: application.company,
+        level: 2,
+      }),
+    ).toBeNull();
+  });
+
+  it("clears auth and leaves the protected page when a protected API call becomes unauthorized", async () => {
+    localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, "stored-token-123");
+    mockedGetMe.mockResolvedValue(createMeResponse());
+    mockedListApplications.mockImplementation(async () => {
+      unauthorizedHandler?.();
+
+      const error = new Error("Unauthorized");
+      Object.assign(error, { status: 401 });
+      throw error;
+    });
+
+    renderApp("/applications");
+
+    await waitFor(() => {
+      expect(mockedListApplications).toHaveBeenCalledWith("stored-token-123");
+    });
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "Sign In",
+        level: 1,
+      }),
+    ).toBeTruthy();
+    expect(localStorage.getItem(AUTH_TOKEN_STORAGE_KEY)).toBeNull();
+    expect(
+      screen.queryByRole("heading", {
+        name: "Applications",
+        level: 1,
+      }),
+    ).toBeNull();
+  });
+
+  it("clears auth and redirects to login when a create request becomes unauthorized", async () => {
+    localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, "stored-token-123");
+    mockedGetMe.mockResolvedValue(createMeResponse());
+    mockedCreateApplication.mockImplementation(async () => {
+      unauthorizedHandler?.();
+
+      throw new ApiError("Unauthorized", 401);
+    });
+
+    renderApp("/applications");
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "Applications",
+        level: 1,
+      }),
+    ).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText("Company"), {
+      target: { value: "Expired Session Co" },
+    });
+    fireEvent.change(screen.getByLabelText("Job Title"), {
+      target: { value: "Frontend Engineer" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create application" }));
+
+    await waitFor(() => {
+      expect(mockedCreateApplication).toHaveBeenCalledWith("stored-token-123", {
+        company: "Expired Session Co",
+        job_title: "Frontend Engineer",
+        status: "saved",
+        applied_at: null,
+      });
+      expect(localStorage.getItem(AUTH_TOKEN_STORAGE_KEY)).toBeNull();
+    });
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "Sign In",
+        level: 1,
+      }),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole("heading", {
+        name: "Applications",
+        level: 1,
+      }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("heading", {
+        name: "Expired Session Co",
+        level: 2,
+      }),
+    ).toBeNull();
   });
 
   it("shows an error and does not store a token when login fails", async () => {

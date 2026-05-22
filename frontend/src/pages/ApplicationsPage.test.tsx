@@ -132,6 +132,66 @@ describe("ApplicationsPage update flow", () => {
     cleanup();
   });
 
+  it("shows a create error and keeps the form usable when create fails", async () => {
+    await renderPage(createTestApplication());
+
+    mockedCreateApplication.mockRejectedValue(new Error("Create failed"));
+
+    const companyInput = screen.getByLabelText("Company") as HTMLInputElement;
+    const jobTitleInput = screen.getByLabelText(
+      "Job Title",
+    ) as HTMLInputElement;
+    const statusSelect = screen.getByLabelText("Status") as HTMLSelectElement;
+    const appliedAtInput = screen.getByLabelText(
+      "Applied at",
+    ) as HTMLInputElement;
+
+    fireEvent.change(companyInput, {
+      target: { value: "Acme Labs" },
+    });
+    fireEvent.change(jobTitleInput, {
+      target: { value: "Frontend Engineer" },
+    });
+    fireEvent.change(statusSelect, {
+      target: { value: "interviewing" },
+    });
+    fireEvent.change(appliedAtInput, {
+      target: { value: "2026-05-21" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create application" }));
+
+    const alert = await screen.findByRole("alert");
+
+    expect(alert.textContent).toBe("Create failed");
+    expect(mockedCreateApplication).toHaveBeenCalledWith("token-123", {
+      company: "Acme Labs",
+      job_title: "Frontend Engineer",
+      status: "interviewing",
+      applied_at: "2026-05-21T12:00:00.000Z",
+    });
+    expect(mockedListApplications).toHaveBeenCalledTimes(1);
+    expect(
+      screen.queryByRole("heading", {
+        name: "Acme Labs",
+        level: 2,
+      }),
+    ).toBeNull();
+    expect(
+      (
+        screen.getByRole("button", {
+          name: "Create application",
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(false);
+    expect(companyInput.value).toBe("Acme Labs");
+
+    fireEvent.change(companyInput, {
+      target: { value: "Acme Labs Updated" },
+    });
+
+    expect(companyInput.value).toBe("Acme Labs Updated");
+  });
+
   it("closes edit mode without sending a patch when nothing changed", async () => {
     const card = await renderPage(createTestApplication());
 
@@ -238,6 +298,50 @@ describe("ApplicationsPage update flow", () => {
     ).toBeTruthy();
   });
 
+  it("shows an update error and keeps edit mode open when update fails", async () => {
+    const application = createTestApplication();
+    const card = await renderPage(application);
+
+    mockedUpdateApplication.mockRejectedValue(new Error("Update failed"));
+
+    fireEvent.click(card.getByRole("button", { name: "Edit" }));
+    fireEvent.change(card.getByLabelText("Company"), {
+      target: { value: "Acme Labs" },
+    });
+    fireEvent.click(card.getByRole("button", { name: "Save" }));
+
+    const alert = await card.findByRole("alert");
+
+    expect(alert.textContent).toBe("Update failed");
+    expect(mockedUpdateApplication).toHaveBeenCalledWith("token-123", 1, {
+      company: "Acme Labs",
+    });
+    expect(mockedListApplications).toHaveBeenCalledTimes(1);
+    expect(card.getByRole("button", { name: "Save" })).toBeTruthy();
+    expect((card.getByLabelText("Company") as HTMLInputElement).value).toBe(
+      "Acme Labs",
+    );
+
+    fireEvent.click(card.getByRole("button", { name: "Cancel" }));
+
+    const unchangedHeading = screen.getByRole("heading", {
+      name: application.company,
+      level: 2,
+    });
+    const unchangedCard = unchangedHeading.closest("li");
+
+    if (!unchangedCard) throw new Error("Application card not found");
+
+    expect(
+      screen.queryByRole("heading", {
+        name: "Acme Labs",
+        level: 2,
+      }),
+    ).toBeNull();
+    expect(within(unchangedCard).getByText(application.job_title)).toBeTruthy();
+    expect(within(unchangedCard).getByText(application.status)).toBeTruthy();
+  });
+
   it("does not delete when confirmation is canceled", async () => {
     const card = await renderPage(createTestApplication());
 
@@ -279,6 +383,31 @@ describe("ApplicationsPage update flow", () => {
     });
 
     expect(await screen.findByText("No applications found.")).toBeTruthy();
+  });
+
+  it("shows a delete error and restores the delete button when delete fails", async () => {
+    const application = createTestApplication();
+    const card = await renderPage(application);
+
+    mockedDeleteApplication.mockRejectedValue(new Error("Delete failed"));
+
+    fireEvent.click(card.getByRole("button", { name: "Delete" }));
+
+    const alert = await screen.findByRole("alert");
+    const deleteButton = card.getByRole("button", {
+      name: "Delete",
+    }) as HTMLButtonElement;
+
+    expect(alert.textContent).toBe("Delete failed");
+    expect(
+      screen.getByRole("heading", {
+        name: application.company,
+        level: 2,
+      }),
+    ).toBeTruthy();
+    expect(mockedListApplications).toHaveBeenCalledTimes(1);
+    expect(deleteButton.disabled).toBe(false);
+    expect(screen.queryByRole("button", { name: "Deleting..." })).toBeNull();
   });
 
   it("disables delete and edit actions while delete is in flight", async () => {
@@ -379,18 +508,5 @@ describe("ApplicationsPage update flow", () => {
     await waitFor(() => {
       expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
     });
-  });
-
-  it("shows a delete error when the delete request fails", async () => {
-    const card = await renderPage(createTestApplication());
-
-    mockedDeleteApplication.mockRejectedValue(new Error("Delete failed"));
-
-    fireEvent.click(card.getByRole("button", { name: "Delete" }));
-
-    const alert = await screen.findByRole("alert");
-
-    expect(alert.textContent).toBe("Delete failed");
-    expect(mockedListApplications).toHaveBeenCalledTimes(1);
   });
 });
