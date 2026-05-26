@@ -20,6 +20,7 @@ type AuthContextValue = {
   user: User | null;
   token: string | null;
   isHydrating: boolean;
+  authMessage: string | null;
   login: (credentials: LoginRequestBody) => Promise<void>;
   logout: () => void;
 };
@@ -38,6 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isHydrating, setIsHydrating] = useState(true);
+  const [authMessage, setAuthMessage] = useState<string | null>(null);
 
   const clearAuth = useCallback(() => {
     localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
@@ -45,13 +47,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(null);
   }, []);
 
+  const handleUnauthorizedSession = useCallback(() => {
+    clearAuth();
+    setAuthMessage("Your session expired. Please sign in again.");
+  }, [clearAuth]);
+
   useEffect(() => {
-    setUnauthorizedHandler(clearAuth);
+    setUnauthorizedHandler(handleUnauthorizedSession);
 
     return () => {
       setUnauthorizedHandler(null);
     };
-  }, [clearAuth]);
+  }, [handleUnauthorizedSession]);
 
   useEffect(() => {
     const storedToken = localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
@@ -85,19 +92,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [clearAuth]);
 
-  const login = useCallback(
-    async (credentials: LoginRequestBody) => {
-      const response = await loginRequest(credentials);
+  const login = useCallback(async (credentials: LoginRequestBody) => {
+    const response = await loginRequest(credentials);
 
-      localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, response.token);
-      setToken(response.token);
-      setUser(toUser(response.user));
-    },
-    [clearAuth],
-  );
+    localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, response.token);
+    setToken(response.token);
+    setUser(toUser(response.user));
+    setAuthMessage(null);
+  }, []);
 
   const logout = useCallback(() => {
     clearAuth();
+    setAuthMessage(null);
   }, [clearAuth]);
 
   const value = useMemo<AuthContextValue>(
@@ -105,10 +111,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       token,
       isHydrating,
+      authMessage,
       login,
       logout,
     }),
-    [isHydrating, login, logout, token, user],
+    [isHydrating, authMessage, login, logout, token, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

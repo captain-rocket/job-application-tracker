@@ -187,6 +187,9 @@ describe("App auth and routing", () => {
     expect(mockedGetMe).toHaveBeenCalledWith("expired-token-123");
     expect(mockedListApplications).not.toHaveBeenCalled();
     expect(localStorage.getItem(AUTH_TOKEN_STORAGE_KEY)).toBeNull();
+    expect(
+      screen.getByText("Your session expired. Please sign in again."),
+    ).toBeTruthy();
   });
 
   it("blocks unauthenticated users from protected routes", async () => {
@@ -306,6 +309,9 @@ describe("App auth and routing", () => {
         level: 1,
       }),
     ).toBeNull();
+    expect(
+      screen.getByText("Your session expired. Please sign in again."),
+    ).toBeTruthy();
   });
 
   it("clears auth and redirects to login when a create request becomes unauthorized", async () => {
@@ -362,6 +368,9 @@ describe("App auth and routing", () => {
         level: 2,
       }),
     ).toBeNull();
+    expect(
+      screen.getByText("Your session expired. Please sign in again."),
+    ).toBeTruthy();
   });
 
   it("shows an error and does not store a token when login fails", async () => {

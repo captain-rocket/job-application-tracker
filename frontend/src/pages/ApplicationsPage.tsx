@@ -94,6 +94,7 @@ export function ApplicationsPage() {
       if (requestId.current !== currentRequestId) return;
 
       setApplications(response.applications);
+      setDeleteError(null);
     } catch (error) {
       if (requestId.current !== currentRequestId) return;
 
@@ -307,6 +308,7 @@ export function ApplicationsPage() {
                 type="text"
                 value={company}
                 onChange={(event) => setCompany(event.target.value)}
+                disabled={isSubmitting}
                 required
               />
             </div>
@@ -319,6 +321,7 @@ export function ApplicationsPage() {
                 type="text"
                 value={jobTitle}
                 onChange={(event) => setJobTitle(event.target.value)}
+                disabled={isSubmitting}
                 required
               />
             </div>
@@ -332,6 +335,7 @@ export function ApplicationsPage() {
                 onChange={(event) =>
                   setStatus(event.target.value as ApplicationStatus)
                 }
+                disabled={isSubmitting}
                 required
               >
                 {APPLICATION_STATUS_OPTIONS.map((option) => (
@@ -350,6 +354,7 @@ export function ApplicationsPage() {
                 type="date"
                 value={appliedAt}
                 onChange={(event) => setAppliedAt(event.target.value)}
+                disabled={isSubmitting}
               />
             </div>
           </div>
@@ -370,13 +375,17 @@ export function ApplicationsPage() {
       ) : null}
 
       {isLoading ? (
-        <p className="statusMessage">Loading applications</p>
+        <p role="status" className="statusMessage">
+          Loading applications
+        </p>
       ) : loadError ? (
         <p role="alert" className="errorMessage">
           {loadError}
         </p>
       ) : applications.length === 0 ? (
-        <p className="statusMessage">No applications found.</p>
+        <p role="status" className="statusMessage">
+          No applications found.
+        </p>
       ) : (
         <ul className={styles.applicationList}>
           {applications.map((application) => (

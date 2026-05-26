@@ -6,7 +6,9 @@ import { LoginPage } from "./pages/LoginPage";
 function RouteLoading() {
   return (
     <div className="pageShell">
-      <p className="statusMessage">Loading session...</p>
+      <p role="status" className="statusMessage">
+        Loading session...
+      </p>
     </div>
   );
 }

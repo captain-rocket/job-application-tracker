@@ -114,6 +114,7 @@ describe("ApplicationsPage update flow", () => {
         email: "user@example.com",
         role: "user",
       },
+      authMessage: null,
       isHydrating: false,
       login: vi.fn(),
       logout: mockLogout,
@@ -190,6 +191,65 @@ describe("ApplicationsPage update flow", () => {
     });
 
     expect(companyInput.value).toBe("Acme Labs Updated");
+  });
+
+  it("disables the create form while create is in flight", async () => {
+    await renderPage(createTestApplication());
+
+    let resolveCreate:
+      | ((value: { application: Application }) => void)
+      | undefined;
+
+    mockedCreateApplication.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveCreate = resolve;
+        }),
+    );
+
+    fireEvent.change(screen.getByLabelText("Company"), {
+      target: { value: "Acme Labs" },
+    });
+
+    fireEvent.change(screen.getByLabelText("Job Title"), {
+      target: { value: "Frontend Engineer" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Create application" }));
+
+    await waitFor(() => {
+      expect(mockedCreateApplication).toHaveBeenCalledTimes(1);
+      expect(
+        (screen.getByLabelText("Company") as HTMLInputElement).disabled,
+      ).toBe(true);
+      expect(
+        (screen.getByLabelText("Job Title") as HTMLInputElement).disabled,
+      ).toBe(true);
+      expect(
+        (screen.getByLabelText("Status") as HTMLSelectElement).disabled,
+      ).toBe(true);
+      expect(
+        (screen.getByLabelText("Applied at") as HTMLInputElement).disabled,
+      ).toBe(true);
+      expect(
+        (
+          screen.getByRole("button", {
+            name: "Submitting...",
+          }) as HTMLButtonElement
+        ).disabled,
+      ).toBe(true);
+    });
+
+    if (!resolveCreate)
+      throw new Error("Expected create request to be pending");
+
+    resolveCreate({ application: createTestApplication({ id: 99 }) });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Create application" }),
+      ).toBeTruthy();
+    });
   });
 
   it("closes edit mode without sending a patch when nothing changed", async () => {
@@ -408,6 +468,35 @@ describe("ApplicationsPage update flow", () => {
     expect(mockedListApplications).toHaveBeenCalledTimes(1);
     expect(deleteButton.disabled).toBe(false);
     expect(screen.queryByRole("button", { name: "Deleting..." })).toBeNull();
+  });
+
+  it("clears a stale delete error after a successful list refresh", async () => {
+    const application = createTestApplication();
+    const card = await renderPage(application);
+
+    mockedDeleteApplication.mockRejectedValue(new Error("Delete failed"));
+
+    fireEvent.click(card.getByRole("button", { name: "Delete" }));
+
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      "Delete failed",
+    );
+
+    fireEvent.change(screen.getByLabelText("Company"), {
+      target: { value: "Acme Labs" },
+    });
+    fireEvent.change(screen.getByLabelText("Job Title"), {
+      target: { value: "Frontend Engineer" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Create application",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByRole("alert")).toBeNull();
+    });
   });
 
   it("disables delete and edit actions while delete is in flight", async () => {

@@ -4,7 +4,7 @@ import { useAuth } from "../auth/AuthProvider";
 import styles from "./LoginPage.module.css";
 
 export function LoginPage() {
-  const { user, login, isHydrating } = useAuth();
+  const { user, login, isHydrating, authMessage } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -14,7 +14,9 @@ export function LoginPage() {
   if (isHydrating) {
     return (
       <div className="pageShell">
-        <p className="statusMessage">Loading session...</p>
+        <p role="status" className="statusMessage">
+          Loading session...
+        </p>
       </div>
     );
   }
@@ -46,6 +48,10 @@ export function LoginPage() {
         {error ? (
           <p role="alert" className="errorMessage">
             {error}
+          </p>
+        ) : authMessage ? (
+          <p role="status" className="statusMessage">
+            {authMessage}
           </p>
         ) : null}
         <form onSubmit={handleSubmit}>
