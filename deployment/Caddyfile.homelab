@@ -1,0 +1,13 @@
+{$APP_HOST} {
+  root * /usr/share/caddy
+  encode gzip
+
+  handle_path /api/* {
+    reverse_proxy api:4000
+  }
+
+  handle {
+    try_files {path} /index.html
+    file_server
+  }
+}

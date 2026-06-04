@@ -1,13 +1,13 @@
 # Job Application Tracker
 
-A full-stack job application tracker with deployed backend API and local React frontend.
+A full-stack job application tracker with a deployed backend API, local React frontend, and home lab same-origin frontend deployment path.
 
 Current status:
 
 - Backend API is deployed on AWS EC2 with PostgreSQL on AWS RDS
 - Backend can also run on a home lab VM with Docker Compose
 - Frontend exists in `frontend/` and currently runs locally with Vite
-- Frontend production deployment is not implemented yet
+- Home lab production serves the React build through Caddy with same-origin `/api` routing
 
 Backend stack:
 
@@ -39,11 +39,13 @@ Implemented features:
 
 ## Architecture Overview
 
-The backend exposes authenticated REST routes for users, tasks and job applications. The React frontend consumes application routes for the current job application CRUD workflow.
+The backend exposes authenticated REST routes for users, tasks and job applications. The React frontend consumes those routes through a same-origin `/api` prefix in local development and the home lab deployment.
 
 ```text
-Frontend (React + TypeScript + Vite)
-        ↓
+Frontend (React + TypeScript + Vite/Caddy)
+        ↓ /api/*
+Same-origin proxy (Vite dev server or Caddy)
+        ↓ strips /api
 Backend API (Express + TypeScript)
         ↓
 PostgreSQL Database
@@ -68,14 +70,25 @@ Client/browser
   v
 Vite dev server (:5173, outside Docker)
   |- serves React frontend
-  |- proxies /auth and /applications
+  |- proxies /api/* to Express after stripping /api
   v
 Docker Compose
   | - api container (Node.js + Express)
   | - db container (PostgreSQL)
+
+Production (home lab)
+Client/browser
   |
   v
-Production (AWS)
+Caddy web service (:80/:443)
+  |- serves React static build
+  |- proxies /api/* to api:4000 after stripping /api
+  v
+Docker Compose
+  |- api container (Node.js + Express, internal port 4000)
+  |- db container (PostgreSQL, internal only)
+
+Production (AWS backend-only path)
 Client
   |
   v
@@ -86,9 +99,9 @@ EC2 instance
 AWS RDS PostgreSQL (private)
 ```
 
-Frontend production hosting is not yet configured.
+Home lab production serves the React build through Caddy. Browser routes such as `/`, `/login`, and `/applications` return the React app, while `/api/*` is proxied to Express after the `/api` prefix is stripped.
 
-In local development, the frontend calls backend routes without an `/api` prefix. Vite proxies `/auth` and `/applications` requests to `http://localhost:4000`.
+In local development, the frontend also calls `/api/*`. Vite proxies those requests to `http://localhost:4000` after stripping `/api`, so Express route mounting stays unchanged.
 
 ## Request Lifecycle
 
@@ -135,13 +148,17 @@ job-application-tracker/
 │   ├── init.homelab.sql
 │   ├── init.sql
 │   └── preflight.homelab.sh
+├── deployment
+│   └── Caddyfile.homelab
 ├── docker-compose.homelab.yml
 ├── docker-compose.yml
 ├── frontend
+│   ├── Dockerfile.homelab
 │   ├── index.html
 │   ├── package-lock.json
 │   ├── package.json
 │   ├── src
+│   │   ├── __test__
 │   │   ├── api
 │   │   ├── App.tsx
 │   │   ├── auth
@@ -296,7 +313,7 @@ npm run build
 npm test
 ```
 
-The frontend calls backend routes without `/api` prefix. During local development, `frontend/vite.config.ts` proxies `/auth` and `/applications` to the backend `http://localhost:4000`
+The frontend calls `/api/*` routes. During local development, `frontend/vite.config.ts` proxies `/api/*` to `http://localhost:4000` after stripping the `/api` prefix.
 
 ---
 
@@ -310,18 +327,20 @@ The backend production AWS deployment path is implemented:
 - PostgreSQL on AWS RDS
 - GitHub Actions manual deploy to EC2
 
-The frontend is not deployed yet and currently runs locally only.
+The AWS frontend deployment path is not implemented yet; the home lab target below serves the frontend through Caddy.
 
 See `backend/DEPLOYMENT.md` for the full AWS deployment instructions.
 
 ### Home lab deployment
 
-An additional self-hosted deployment target is available for a single VM using Docker Compose:
+An additional self-hosted deployment target is available for a single VM using Docker Compose and Caddy:
 
-- API container on the VM
-- PostgreSQL container on the same VM
-- Persistent PostgreSQL volume
-- API exposed on port 4000
+- Caddy web container serving the React static build
+- `/api/*` reverse proxy to the internal API after stripping `/api`
+- API container on the VM, exposed only to the Compose network
+- PostgreSQL container on the same VM, kept internal to the Compose network
+- Persistent PostgreSQL and Caddy data volumes
+- Public ingress only through the Caddy web service on ports 80 and 443
 - First boot initializes schema only, with no demo accounts or seed data
 
 Setup from the repository root:
@@ -338,6 +357,10 @@ The application uses `DB_USER` and `DB_PASSWORD` at runtime. The Postgres contai
 
 The Postgres container now fails before volume initialization if `DB_PASSWORD` or `POSTGRES_PASSWORD` still use a shipped placeholder, or if `DB_USER` matches `POSTGRES_USER`.
 
+For local VM validation before public DNS and HTTPS are ready, leave `APP_HOST` unset. Compose will pass `:80` to Caddy, and `http://localhost/api/health` should work from the VM.
+
+For public same-origin validation, set `APP_HOST=job.<domain>` in the Compose environment before starting the stack. Then verify through `https://job.<domain>/api/health`. Do not use `http://localhost/api/health` while `APP_HOST` is set to a real hostname, because Caddy matches requests by the configured site host.
+
 The homelab `docker compose` commands below use `--env-file backend/.env.homelab` so Compose can interpolate values from that file across `docker-compose.homelab.yml`. What each container actually receives is still controlled by its explicit `environment:` block: the `db` service gets the init credentials it needs, and the `api` service gets only its runtime app settings.
 
 ```bash
@@ -347,9 +370,15 @@ docker compose --env-file backend/.env.homelab -f docker-compose.homelab.yml up 
 Verify:
 
 ```bash
-curl http://localhost:4000/health
+curl http://localhost/api/health
 docker compose --env-file backend/.env.homelab -f docker-compose.homelab.yml ps
 docker compose --env-file backend/.env.homelab -f docker-compose.homelab.yml exec db sh -c 'pg_isready -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+```
+
+Use the `localhost` health check only when `APP_HOST` is unset. With `APP_HOST=job.<domain>`, verify the public hostname instead:
+
+```bash
+curl https://job.<domain>/api/health
 ```
 
 Fresh home lab installs do not create an admin user automatically. See `backend/DEPLOYMENT.md` for the one-time admin bootstrap step after registering your first account.
@@ -394,7 +423,7 @@ See:
 - Production uses external PostgreSQL (RDS)
 - Docker Compose is not used in production
 - Secrets must be provided via environment variables
-- Frontend production hosting is not yet configured.
+- AWS frontend production hosting is not yet configured.
 
 ---
 
@@ -426,6 +455,8 @@ Rerunning the seed script refreshes those rows without changing the seeded crede
 ---
 
 ## API Routes
+
+Backend routes are mounted without an `/api` prefix. In the homelab same-origin deployment, browser requests use `/api/*`, and Caddy strips `/api` before forwarding to Express.
 
 Public routes
 
@@ -587,7 +618,7 @@ Workflow file:
 
 Additional production setup details, required GitHub secrets, and server prerequisites are documented in `backend/DEPLOYMENT.md`.
 
-The frontend currently has local build and test scripts, but is not part of the production deployment path yet.
+The frontend currently has local build and test scripts plus a home lab Caddy deployment path, but it is not part of the AWS production deployment path yet.
 
 ---
 
@@ -601,7 +632,7 @@ Intentionally focused, with emphasis on production-oriented backend practices:
 - automated API tests with coverage reporting
 - CI separated from manual production deployment
 - environment-based runtime configuration for local and production deployment paths
-- local React frontend for authenticated application CRUD
+- same-origin React frontend for authenticated application CRUD
 - frontend regression tests for key CRUD interactions
 
 ## Development Roadmap
@@ -612,10 +643,10 @@ Completed recently:
 - AWS EC2 + RDS deployment
 - Production environment configuration
 - Live backend health check validation on AWS
+- Home lab same-origin frontend deployment path
 
 Upcoming phases:
 
-- Frontend deployment
 - Frontend polish
 - Expanded frontend test coverage
 - Pagination and filter UI

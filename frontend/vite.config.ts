@@ -6,20 +6,10 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      "/auth": {
+      "/api": {
         target: "http://localhost:4000",
         changeOrigin: true,
-      },
-      "/applications": {
-        target: "http://localhost:4000",
-        changeOrigin: true,
-        bypass(req) {
-          const accept = req.headers.accept ?? "";
-
-          if (accept.includes("text/html")) {
-            return "/index.html";
-          }
-        },
+        rewrite: (path) => path.replace(/^\/api/, ""),
       },
     },
   },

@@ -177,10 +177,11 @@ Deployment model:
 
 - One VM
 - One Docker Compose stack
-- API container and PostgreSQL container on the same host
-- PostgreSQL data stored in a persistent Docker volume
-- API exposed on port 4000
-- PostgreSQL kept internal to the Compose network
+- Caddy web container serving the React static build on ports 80 and 443
+- `/api/*` proxied internally to Express after stripping `/api`
+- API container exposed only to the Compose network on port 4000
+- PostgreSQL container kept internal to the Compose network
+- Persistent PostgreSQL and Caddy data volumes
 - First boot initializes schema only, with no demo accounts or seed data
 
 This path does not replace the AWS deployment and does not change the existing GitHub Actions flow.
@@ -194,6 +195,11 @@ From the repository root:
 ```bash
 cp backend/.env.homelab.example backend/.env.homelab
 ```
+
+The frontend/Caddy deployment also uses:
+
+- `deployment/Caddyfile.homelab`
+- `frontend/Dockerfile.homelab`
 
 Update `backend/.env.homelab` before starting the stack. `DB_USER` and `DB_PASSWORD` are for the lower-privilege application role that the init script creates on first boot. `POSTGRES_USER` and `POSTGRES_PASSWORD` are for the bootstrap admin account created by the Postgres container. `DB_USER` must differ from `POSTGRES_USER`.
 
@@ -217,7 +223,14 @@ POSTGRES_DB=jobtracker
 JWT_SECRET=change-me
 
 PORT=4000
+
+# Optional for public HTTPS deployment:
+# APP_HOST=job.<domain>
 ```
+
+For local VM validation before public DNS and HTTPS are ready, leave `APP_HOST` unset. Compose will pass `:80` to Caddy, and `http://localhost/api/health` should work from the VM.
+
+For public same-origin validation, set `APP_HOST=job.<domain>` in the Compose environment before starting the stack. Then verify through `https://job.<domain>/api/health`. Do not use `http://localhost/api/health` while `APP_HOST` is set to a real hostname, because Caddy matches requests by the configured site host.
 
 The API uses `DB_USER` and `DB_PASSWORD` at runtime. During the first `docker compose up`, PostgreSQL uses `POSTGRES_USER` and `POSTGRES_PASSWORD` to initialize the database, and it also reads `DB_USER` and `DB_PASSWORD` once to create the lower-privilege application role. Changing any of those values later does not repair an already-initialized volume automatically.
 
@@ -241,10 +254,10 @@ Check container status:
 docker compose --env-file backend/.env.homelab -f docker-compose.homelab.yml ps
 ```
 
-Check API health from the VM:
+Check API health through Caddy from the VM when `APP_HOST` is unset:
 
 ```bash
-curl http://localhost:4000/health
+curl http://localhost/api/health
 ```
 
 Expected response:
@@ -254,6 +267,12 @@ Expected response:
 ```
 
 This confirms the API process is running. The API now verifies its `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, and `DB_NAME` settings before it starts listening, so a successful response also means those credentials worked during startup. It does not continuously re-check database connectivity after startup.
+
+When `APP_HOST=job.<domain>` is set and DNS/firewall routing point at the VM, verify the public hostname instead:
+
+```bash
+curl https://job.<domain>/api/health
+```
 
 Check PostgreSQL readiness from inside the database container:
 
@@ -265,6 +284,12 @@ Expected response:
 
 ```text
 127.0.0.1:5432 - accepting connections
+```
+
+Check recent Caddy logs:
+
+```bash
+docker compose --env-file backend/.env.homelab -f docker-compose.homelab.yml logs web --tail 100
 ```
 
 Check recent API logs:
@@ -284,7 +309,7 @@ docker compose --env-file backend/.env.homelab -f docker-compose.homelab.yml log
 Fresh home lab installs start with no users and no admin account. To enable admin routes, first register a normal user through the API:
 
 ```bash
-curl -X POST http://localhost:4000/auth/register \
+curl -X POST http://localhost/api/auth/register \
   -H "Content-Type: application/json" \
   -d '{"email":"<your-admin-email>","password":"<your-strong-password>"}'
 ```
@@ -298,7 +323,7 @@ docker compose --env-file backend/.env.homelab -f docker-compose.homelab.yml exe
 After the SQL update, authenticate again to get a new JWT with the `admin` role claim. Tokens issued by `/auth/register` before the promotion still contain the original role and will continue to fail admin authorization checks:
 
 ```bash
-curl -X POST http://localhost:4000/auth/login \
+curl -X POST http://localhost/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"<your-admin-email>","password":"<your-strong-password>"}'
 ```
@@ -330,7 +355,7 @@ docker compose --env-file backend/.env.homelab -f docker-compose.homelab.yml up 
 Re-check health:
 
 ```bash
-curl http://localhost:4000/health
+curl http://localhost/api/health
 ```
 
 Re-check PostgreSQL readiness after restart:

@@ -20,6 +20,24 @@ services:
       retries: 5
       start_period: 10s
 
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.homelab
+    restart: unless-stopped
+    environment:
+      APP_HOST: "${APP_HOST:-:80}"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deployment/Caddyfile.homelab:/etc/caddy/Caddyfile:ro
+      - homelab-caddy-data:/data
+      - homelab-caddy-config:/config
+    depends_on:
+      api:
+        condition: service_started
+
   api:
     build:
       context: ./backend
@@ -35,11 +53,13 @@ services:
       DB_SSL_REJECT_UNAUTHORIZED: ${DB_SSL_REJECT_UNAUTHORIZED:?Set DB_SSL_REJECT_UNAUTHORIZED in backend/.env.homelab}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in backend/.env.homelab}
       PORT: ${PORT:?Set PORT in backend/.env.homelab}
-    ports:
-      - "4000:4000"
+    expose:
+      - "4000"
     depends_on:
       db:
         condition: service_healthy
 
 volumes:
   homelab-pgdata:
+  homelab-caddy-data:
+  homelab-caddy-config:

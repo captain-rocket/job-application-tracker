@@ -84,7 +84,7 @@ export function setUnauthorizedHandler(handler: (() => void) | null) {
 }
 
 export function login(body: LoginRequestBody) {
-  return request<LoginResponse>("/auth/login", {
+  return request<LoginResponse>("/api/auth/login", {
     method: "POST",
     body,
     handleUnauthorized: false,
@@ -92,20 +92,23 @@ export function login(body: LoginRequestBody) {
 }
 
 export function getMe(token: string) {
-  return request<MeResponse>("/auth/me", { token });
+  return request<MeResponse>("/api/auth/me", { token });
 }
 
 export function listApplications(token: string) {
-  return request<ListApplicationsResponse>("/applications?page=1&limit=20", {
-    token,
-  });
+  return request<ListApplicationsResponse>(
+    "/api/applications?page=1&limit=20",
+    {
+      token,
+    },
+  );
 }
 
 export function createApplication(
   token: string,
   body: CreateApplicationRequestBody,
 ) {
-  return request<CreateApplicationResponse>("/applications", {
+  return request<CreateApplicationResponse>("/api/applications", {
     method: "POST",
     token,
     body,
@@ -113,10 +116,13 @@ export function createApplication(
 }
 
 export function deleteApplication(token: string, applicationId: number) {
-  return request<DeleteApplicationResponse>(`/applications/${applicationId}`, {
-    method: "DELETE",
-    token,
-  });
+  return request<DeleteApplicationResponse>(
+    `/api/applications/${applicationId}`,
+    {
+      method: "DELETE",
+      token,
+    },
+  );
 }
 
 export function updateApplication(
@@ -124,9 +130,12 @@ export function updateApplication(
   applicationId: number,
   body: UpdateApplicationRequestBody,
 ) {
-  return request<UpdateApplicationResponse>(`/applications/${applicationId}`, {
-    method: "PATCH",
-    token,
-    body,
-  });
+  return request<UpdateApplicationResponse>(
+    `/api/applications/${applicationId}`,
+    {
+      method: "PATCH",
+      token,
+      body,
+    },
+  );
 }
