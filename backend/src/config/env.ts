@@ -29,6 +29,24 @@ function getOptionalEnv(name: string): string | undefined {
   return v.trim();
 }
 
+export function getProxyEnv() {
+  return {
+    trustProxy: getBooleanEnv("TRUST_PROXY", false),
+  };
+}
+
+function getOptionalEmailEnv(name: string): string | undefined {
+  const v = getOptionalEnv(name);
+  if (!v) return undefined;
+
+  const normalized = v.toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized))
+    throw new Error(
+      `Environment variable ${name} must be a valid email address`,
+    );
+  return normalized;
+}
+
 function getNumberEnv(name: string, fallback?: number): number {
   const v = process.env[name];
   if (!v || v.trim() === "") {
@@ -142,11 +160,24 @@ export function getAuthEnv() {
   };
 }
 
+export function getPublicAccessEnv() {
+  const { isProduction } = getAppEnv();
+
+  return {
+    publicRegistrationEnabled: getBooleanEnv(
+      "PUBLIC_REGISTRATION_ENABLED",
+      !isProduction,
+    ),
+    publicDemoUserEmail: getOptionalEmailEnv("PUBLIC_DEMO_USER_EMAIL"),
+  };
+}
+
 export function getServerEnv() {
   const app = getAppEnv();
   const port = getNumberEnv("PORT", 4000);
   const db = getDbEnv();
   const auth = getAuthEnv();
+  const publicAccess = getPublicAccessEnv();
 
   if (app.isProduction && port <= 0)
     throw new Error("PORT must be a positive number");
@@ -159,6 +190,7 @@ export function getServerEnv() {
     port,
     db,
     auth,
+    publicAccess,
   };
 }
 
@@ -171,7 +203,7 @@ export function getDbSslConfig() {
 }
 
 export function getRedactedStartupConfig() {
-  const { nodeEnv, port, db } = getServerEnv();
+  const { nodeEnv, port, db, publicAccess } = getServerEnv();
 
   return {
     nodeEnv,
@@ -183,6 +215,10 @@ export function getRedactedStartupConfig() {
       database: db.database,
       sslEnabled: db.sslEnabled,
       sslRejectUnauthorized: db.sslRejectUnauthorized,
+    },
+    publicAccess: {
+      publicRegistrationEnabled: publicAccess.publicRegistrationEnabled,
+      publicDemoUserConfigured: Boolean(publicAccess.publicDemoUserEmail),
     },
   };
 }

@@ -224,6 +224,9 @@ JWT_SECRET=change-me
 
 PORT=4000
 
+PUBLIC_REGISTRATION_ENABLED=false
+PUBLIC_DEMO_USER_EMAIL=
+
 # Optional for public HTTPS deployment:
 # APP_HOST=job.<domain>
 ```
@@ -304,17 +307,54 @@ Check recent PostgreSQL logs:
 docker compose --env-file backend/.env.homelab -f docker-compose.homelab.yml logs db --tail 100
 ```
 
-### Bootstrap first admin user
+### Bootstrap public demo user
 
-Fresh home lab installs start with no users and no admin account. To enable admin routes, first register a normal user through the API:
+Fresh home lab installs start with no users. Before public DNS, port forwarding, or firewall exposure is enabled:
+
+1. Temporarily set `PUBLIC_REGISTRATION_ENABLED=true` in `backend/.env.homelab`.
+2. Restart the API container.
+3. Register the public demo user through the private VM URL.
+4. Set `PUBLIC_DEMO_USER_EMAIL=<public-demo-email>`.
+5. Set `PUBLIC_REGISTRATION_ENABLED=false`.
+6. Restart the API container again before public exposure.
+
+Restart API after env changes:
+
+```bash
+docker compose --env-file backend/.env.homelab -f docker-compose.homelab.yml up -d api
+```
+
+Register the demo user while the VM is still private:
 
 ```bash
 curl -X POST http://localhost/api/auth/register \
   -H "Content-Type: application/json" \
-  -d '{"email":"<your-admin-email>","password":"<your-strong-password>"}'
+  -d '{"email":"<public-demo-email>","password":"<demo-password>"}'
 ```
 
-Then promote that user to `admin` directly in PostgreSQL:
+Verify the demo user exists and has `role = 'user'`:
+
+```bash
+docker compose --env-file backend/.env.homelab -f docker-compose.homelab.yml exec db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT email, role FROM users WHERE email = '\''<public-demo-email>'\'';"'
+```
+
+Confirm registration is disabled again before public exposure:
+
+```bash
+docker compose --env-file backend/.env.homelab -f docker-compose.homelab.yml exec api printenv PUBLIC_REGISTRATION_ENABLED
+```
+
+Expected value:
+
+```text
+false
+```
+
+### Bootstrap first admin user
+
+Fresh home lab installs do not need an admin user for the public demo. If admin routes are needed later, create the admin account privately and do not document its credentials publicly.
+
+Before public exposure, you can use the same temporary private registration window described above to register a private admin email as a normal user. Then promote that user to `admin` directly in PostgreSQL:
 
 ```bash
 docker compose --env-file backend/.env.homelab -f docker-compose.homelab.yml exec db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "UPDATE users SET role = '\''admin'\'' WHERE email = '\''<your-admin-email>'\'';"'

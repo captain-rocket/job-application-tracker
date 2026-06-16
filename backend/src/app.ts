@@ -1,3 +1,4 @@
+import { getProxyEnv } from "./config/env";
 import express from "express";
 
 import { Pool } from "pg";
@@ -12,9 +13,13 @@ import {
 import { errorHandler } from "./middleware";
 
 export function createApp(db: Pool) {
+  const { trustProxy } = getProxyEnv();
   const app = express();
 
-  app.use(express.json());
+  if (trustProxy) {
+    app.set("trust proxy", 1);
+  }
+  app.use(express.json({ limit: "16kb" }));
 
   app.use(healthRoutes());
   app.use(authRoutes(db));

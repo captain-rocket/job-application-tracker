@@ -56,8 +56,14 @@ export type CreateApplicationRequestBody = {
   applied_at: string | null;
 };
 
+export type CreateApplicationNotice = {
+  code: "demo_application_cleanup";
+  message: string;
+};
+
 export type CreateApplicationResponse = {
   application: Application;
+  notice?: CreateApplicationNotice;
 };
 
 export type UpdateApplicationRequestBody = {

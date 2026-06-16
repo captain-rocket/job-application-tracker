@@ -5,6 +5,20 @@ import {
 } from "./testUtils";
 
 describe("Application routes", () => {
+  const originalPublicDemoUserEmail = process.env.PUBLIC_DEMO_USER_EMAIL;
+
+  beforeEach(() => {
+    delete process.env.PUBLIC_DEMO_USER_EMAIL;
+  });
+
+  afterEach(() => {
+    if (originalPublicDemoUserEmail === undefined) {
+      delete process.env.PUBLIC_DEMO_USER_EMAIL;
+    } else {
+      process.env.PUBLIC_DEMO_USER_EMAIL = originalPublicDemoUserEmail;
+    }
+  });
+
   test("GET /applications returns 401 when unauthenticated", async () => {
     const app = createAppExpectNoDbCalls("input.invalid");
 
@@ -480,6 +494,140 @@ describe("Application routes", () => {
         updated_at: "2026-03-12T12:00:00.000Z",
       },
     });
+  });
+
+  test("POST /applications cleans up only the public demo user's application when cap is exceeded", async () => {
+    process.env.PUBLIC_DEMO_USER_EMAIL = "demo@example.com";
+
+    let queryCount = 0;
+    const app = createTestAppWithDb(async (sql, params) => {
+      queryCount += 1;
+      const q = sql.toLowerCase().replace(/\s+/g, " ").trim();
+
+      if (q.includes("insert into applications")) {
+        expect(params).toEqual([
+          "demo-user",
+          "Tech Corp",
+          "Software Engineer",
+          "saved",
+          null,
+          null,
+          null,
+          "2026-03-12T12:00:00.000Z",
+        ]);
+
+        return {
+          rows: [
+            {
+              id: 11,
+              company: "Tech Corp",
+              job_title: "Software Engineer",
+              status: "saved",
+              job_url: null,
+              location: null,
+              notes: null,
+              applied_at: "2026-03-12T12:00:00.000Z",
+              created_at: "2026-03-12T12:00:00.000Z",
+              updated_at: "2026-03-12T12:00:00.000Z",
+            },
+          ],
+          rowCount: 1,
+        };
+      }
+
+      if (q.includes("from users") && q.includes("lower(email) = $2")) {
+        expect(params).toEqual(["demo-user", "demo@example.com"]);
+        return { rows: [{ id: "demo-user" }], rowCount: 1 };
+      }
+
+      if (q.includes("select count(*)::int as total from applications")) {
+        expect(params).toEqual(["demo-user"]);
+        return { rows: [{ total: 11 }], rowCount: 1 };
+      }
+
+      if (q.includes("delete from applications")) {
+        expect(q).toContain("where user_id = $1");
+        expect(q).toContain("limit $2");
+        expect(params).toEqual(["demo-user", 3]);
+        return { rows: [], rowCount: 8 };
+      }
+
+      throw new Error(`Unexpected SQL in demo cleanup test: ${sql}`);
+    });
+
+    const res = await makeTestRequest({
+      app,
+      method: "post",
+      path: "/applications",
+      auth: { sub: "demo-user", role: "user" },
+      body: {
+        company: "Tech Corp",
+        job_title: "Software Engineer",
+        status: "saved",
+        applied_at: "2026-03-12T12:00:00.000Z",
+      },
+    });
+    expect(queryCount).toBe(4);
+    expect(res.status).toBe(201);
+    expect(res.body.notice).toEqual({
+      code: "demo_application_cleanup",
+      message:
+        "Demo account cleanup ran after reaching 10 applications. Kept the newest 3 applications and removed 8 older demo applications.",
+    });
+  });
+
+  test("POST /applications does not clean up for non-demo users", async () => {
+    process.env.PUBLIC_DEMO_USER_EMAIL = "demo@example.com";
+
+    let queryCount = 0;
+    const app = createTestAppWithDb(async (sql, params) => {
+      queryCount += 1;
+      const q = sql.toLowerCase().replace(/\s+/g, " ").trim();
+
+      if (q.includes("insert into applications")) {
+        return {
+          rows: [
+            {
+              id: 1,
+              company: "Tech Corp",
+              job_title: "Software Engineer",
+              status: "saved",
+              job_url: null,
+              location: null,
+              notes: null,
+              applied_at: "2026-03-12T12:00:00.000Z",
+              created_at: "2026-03-12T12:00:00.000Z",
+              updated_at: "2026-03-12T12:00:00.000Z",
+            },
+          ],
+          rowCount: 1,
+        };
+      }
+
+      if (q.includes("from user") && q.includes("lower(email) = $2")) {
+        expect(params).toEqual(["user-123", "demo@example.com"]);
+        return { rows: [], rowCount: 0 };
+      }
+
+      throw new Error(`Unexpected SQL in non-demo create test: ${sql}`);
+    });
+
+    const res = await makeTestRequest({
+      app,
+      method: "post",
+      path: "/applications",
+      auth: { sub: "user-123", role: "user" },
+      body: {
+        company: "Tech Corp",
+        job_title: "Software Engineer",
+        status: "saved",
+        applied_at: "2026-03-12T12:00:00.000Z",
+      },
+    });
+
+    expect(queryCount).toBe(2);
+    expect(res.status).toBe(201);
+    expect(res.body.notice).toBeUndefined();
   });
 
   test("POST /applications returns 401 when unauthenticated", async () => {

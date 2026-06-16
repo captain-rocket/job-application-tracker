@@ -1,3 +1,4 @@
+import { getPublicAccessEnv } from "../config/env";
 import { Router } from "express";
 import { Pool } from "pg";
 import {
@@ -16,6 +17,100 @@ import {
   type CreateApplicationBody,
   type UpdateApplicationBody,
 } from "../schemas/applications.schemas";
+
+const DEMO_APPLICATION_CAP = 10;
+const DEMO_APPLICATIONS_TO_KEEP = 3;
+
+type DemoCleanupNotice = {
+  code: "demo_application_cleanup";
+  message: string;
+};
+
+type ApplicationStatus = NonNullable<CreateApplicationBody["status"]>;
+
+type ApplicationResponseRow = {
+  id: number;
+  company: string;
+  job_title: string;
+  status: ApplicationStatus;
+  job_url: string | null;
+  location: string | null;
+  notes: string | null;
+  applied_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type CreateApplicationResponseBody = {
+  application: ApplicationResponseRow;
+  notice?: DemoCleanupNotice;
+};
+
+async function isPublicDemoUser(
+  db: Pool,
+  userId: string,
+  demoUserEmail: string,
+): Promise<boolean> {
+  const result = await db.query(
+    `
+    SELECT id
+    FROM users
+    WHERE id = $1 AND LOWER(email) = $2 AND role = 'user'
+    `,
+    [userId, demoUserEmail],
+  );
+
+  return Boolean(result.rowCount && result.rowCount > 0);
+}
+
+async function cleanupDemoApplicationsIfNeeded(
+  db: Pool,
+  userId: string,
+): Promise<DemoCleanupNotice | null> {
+  const countResult = await db.query(
+    "SELECT COUNT(*)::int AS total FROM applications WHERE user_id = $1",
+    [userId],
+  );
+  const total = countResult.rows[0]?.total ?? 0;
+
+  if (total <= DEMO_APPLICATION_CAP) return null;
+
+  const deleteResult = await db.query(
+    `
+  DELETE FROM applications
+  WHERE user_id = $1
+    AND id NOT IN (
+    SELECT id
+    FROM applications
+    WHERE user_id = $1
+    ORDER BY created_at DESC, id DESC
+    LIMIT $2
+    )
+  `,
+    [userId, DEMO_APPLICATIONS_TO_KEEP],
+  );
+
+  const deletedCount = deleteResult.rowCount ?? 0;
+
+  return {
+    code: "demo_application_cleanup",
+    message: `Demo account cleanup ran after reaching ${DEMO_APPLICATION_CAP} applications. Kept the newest ${DEMO_APPLICATIONS_TO_KEEP} applications and removed ${deletedCount} older demo applications.`,
+  };
+}
+
+async function getCleanupDemoNotice(
+  db: Pool,
+  userId: string,
+): Promise<DemoCleanupNotice | null> {
+  const { publicDemoUserEmail } = getPublicAccessEnv();
+
+  if (!publicDemoUserEmail) return null;
+
+  const isDemoUser = await isPublicDemoUser(db, userId, publicDemoUserEmail);
+  if (!isDemoUser) return null;
+
+  return cleanupDemoApplicationsIfNeeded(db, userId);
+}
 
 export function applicationsRoutes(db: Pool) {
   const router = Router();
@@ -189,7 +284,16 @@ export function applicationsRoutes(db: Pool) {
             applied_at ?? null,
           ],
         );
-        res.status(201).json({ application: result.rows[0] });
+
+        const application = result.rows[0] as ApplicationResponseRow;
+        const notice = await getCleanupDemoNotice(db, req.user!.id);
+        const responseBody: CreateApplicationResponseBody = { application };
+
+        if (notice) {
+          responseBody.notice = notice;
+        }
+
+        res.status(201).json(responseBody);
       } catch (error) {
         next(error);
       }

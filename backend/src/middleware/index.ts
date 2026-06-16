@@ -1,3 +1,4 @@
+import { authRateLimit } from "./authRateLimit";
 import { errorHandler } from "./errorHandler";
 import { requireAuth } from "./requireAuth";
 import { requireRole } from "./requireRole";
@@ -9,6 +10,7 @@ import {
 } from "./validate";
 
 export {
+  authRateLimit,
   errorHandler,
   requireAuth,
   requireRole,

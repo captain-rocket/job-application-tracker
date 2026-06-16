@@ -53,6 +53,9 @@ services:
       DB_SSL_REJECT_UNAUTHORIZED: ${DB_SSL_REJECT_UNAUTHORIZED:?Set DB_SSL_REJECT_UNAUTHORIZED in backend/.env.homelab}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in backend/.env.homelab}
       PORT: ${PORT:?Set PORT in backend/.env.homelab}
+      TRUST_PROXY: ${TRUST_PROXY:-true}
+      PUBLIC_REGISTRATION_ENABLED: ${PUBLIC_REGISTRATION_ENABLED:-false}
+      PUBLIC_DEMO_USER_EMAIL: ${PUBLIC_DEMO_USER_EMAIL:-}
     expose:
       - "4000"
     depends_on:

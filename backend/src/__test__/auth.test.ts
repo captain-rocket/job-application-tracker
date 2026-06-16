@@ -5,9 +5,28 @@ import {
   createTestAppWithDb,
   makeTestRequest,
 } from "./testUtils";
+import { resetAuthRateLimitForTests } from "../middleware/authRateLimit";
 import request from "supertest";
 
 describe("Auth routes", () => {
+  const originalPublicRegistrationEnabled =
+    process.env.PUBLIC_REGISTRATION_ENABLED;
+
+  beforeEach(() => {
+    delete process.env.PUBLIC_REGISTRATION_ENABLED;
+    resetAuthRateLimitForTests();
+  });
+
+  afterEach(async () => {
+    resetAuthRateLimitForTests();
+    if (originalPublicRegistrationEnabled === undefined) {
+      delete process.env.PUBLIC_REGISTRATION_ENABLED;
+    } else {
+      process.env.PUBLIC_REGISTRATION_ENABLED =
+        originalPublicRegistrationEnabled;
+    }
+  });
+
   test("POST /auth/register creates a user and returns token", async () => {
     const app = createTestAppWithDb(async (sql, params) => {
       const q = sql.toLowerCase();
@@ -74,6 +93,49 @@ describe("Auth routes", () => {
 
     expect(res.status).toBe(409);
     expect(res.body).toEqual({ error: "email already in use" });
+  });
+
+  test("POST /auth/register returns 403 when public registration is disabled", async () => {
+    process.env.PUBLIC_REGISTRATION_ENABLED = "false";
+
+    const app = createAppExpectNoDbCalls("input.invalid");
+
+    const res = await makeTestRequest({
+      app,
+      method: "post",
+      path: "/auth/register",
+      body: { email: "me@example.com", password: "password123" },
+    });
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({ error: "Registration is disabled" });
+  });
+
+  test("POST /auth/login returns 429 after too many auth attempts", async () => {
+    const app = createAppExpectNoDbCalls("input.invalid");
+
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const res = await makeTestRequest({
+        app,
+        method: "post",
+        path: "/auth/login",
+        body: { email: "limit@example.com" },
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({ error: "password is required" });
+    }
+
+    const res = await makeTestRequest({
+      app,
+      method: "post",
+      path: "/auth/login",
+      body: { email: "limit@example.com" },
+    });
+
+    expect(res.status).toBe(429);
+    expect(res.body).toEqual({
+      error: "Too many auth attempts. Please try again later.",
+    });
   });
 
   test("POST /auth/login returns token for valid credentials", async () => {
@@ -315,6 +377,19 @@ describe("Auth routes", () => {
 
     expect(res.status).toBe(400);
     expect(res.body).toEqual({ error: "Malformed JSON body" });
+  });
+
+  test("POST /auth/login returns 413 when JSON body is too large", async () => {
+    const app = createAppExpectNoDbCalls("id.invalid");
+
+    const res = await request(app)
+      .post("/auth/login")
+      .send({
+        email: "me@example.com",
+        password: "x".repeat(20_000),
+      });
+    expect(res.status).toBe(413);
+    expect(res.body).toEqual({ error: "Request body too large" });
   });
 
   test("POST /auth/login returns 400 when password is missing", async () => {

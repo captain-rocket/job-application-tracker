@@ -1,9 +1,9 @@
-import { getAuthEnv } from "../config/env";
+import { getAuthEnv, getPublicAccessEnv } from "../config/env";
 import { Router } from "express";
 import { Pool } from "pg";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { requireAuth, validateBody } from "../middleware";
+import { authRateLimit, requireAuth, validateBody } from "../middleware";
 import { loginBodySchema, registerBodySchema } from "../schemas/auth.schemas";
 
 function signToken(user: { id: string; role: "user" | "admin" }) {
@@ -24,6 +24,7 @@ export function authRoutes(db: Pool) {
 
   router.post(
     "/auth/register",
+    authRateLimit,
     validateBody(registerBodySchema),
     async (req, res, next) => {
       const { email, password } = req.body as {
@@ -32,6 +33,11 @@ export function authRoutes(db: Pool) {
       };
 
       try {
+        const { publicRegistrationEnabled } = getPublicAccessEnv();
+        if (!publicRegistrationEnabled) {
+          return res.status(403).json({ error: "Registration is disabled" });
+        }
+
         const existing = await db.query(
           "SELECT id FROM users WHERE email = $1",
           [email],
@@ -75,6 +81,7 @@ export function authRoutes(db: Pool) {
 
   router.post(
     "/auth/login",
+    authRateLimit,
     validateBody(loginBodySchema),
     async (req, res, next) => {
       const { email, password } = req.body as {

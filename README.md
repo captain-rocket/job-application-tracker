@@ -240,7 +240,7 @@ CREATE TABLE applications (
 
 ## Running Locally
 
-The backend and PostgreSQL run through Docker Compose. The frontend currently runs outside Docker with Vite.
+PostgreSQL runs through Docker Compose. For day-to-day development, run the backend and frontend outside Docker so TypeScript changes reload quickly.
 
 ### Backend API and PostgreSQL
 
@@ -252,13 +252,19 @@ From the project root:
 cp backend/.env.example backend/.env
 ```
 
-2. Start the services:
+2. Start PostgreSQL:
 
 ```bash
-docker compose up --build
+docker compose up -d db
 ```
 
-The Compose stack waits for PostgreSQL to report healthy before the API container starts, so the API's startup database probe does not race initial database boot.
+3. Seed local users and start the backend API:
+
+```bash
+cd backend
+npm run seed
+npm run dev
+```
 
 The API will be available at:
 
@@ -267,6 +273,14 @@ The API will be available at:
 Health check endpoint:
 
 GET <http://localhost:4000/health>
+
+For a full Docker smoke test of the local API and database, run this from the project root:
+
+```bash
+docker compose up --build
+```
+
+The Compose stack waits for PostgreSQL to report healthy before the API container starts, so the API's startup database probe does not race initial database boot.
 
 Example backend environment variables:
 
@@ -284,11 +298,14 @@ DB_SSL_REJECT_UNAUTHORIZED=true
 JWT_SECRET=dev-secret
 
 PORT=4000
+
+PUBLIC_REGISTRATION_ENABLED=true
+PUBLIC_DEMO_USER_EMAIL=
 ```
 
 Note: In production, `JWT_SECRET` must be at least 32 characters and must not use weak/default values.
 
-For Docker Compose, the database connection values are supplied by `docker-compose.yml`, and `backend/.env` is primarily used to provide backend configuration such as `JWT_SECRET` when running outside Docker.
+For Docker Compose, the API container database connection values are supplied by `docker-compose.yml`. Keep `DB_HOST=localhost` in `backend/.env` so host-run commands such as `npm run dev` and `npm run seed` can connect to the Compose database through the published local port.
 
 ---
 
@@ -429,9 +446,11 @@ See:
 
 ## Seed Script
 
-Development users can be created from the backend directory:
+Development users can be created after PostgreSQL is running. From the project root:
 
 ```bash
+docker compose up -d db
+cd backend
 npm run seed
 ```
 
@@ -552,6 +571,7 @@ Returns a list of users.
 - The frontend stores the JWT in `localStorage` and hydrates the session on page load
 - The `/applications` frontend route is protected by client-side auth state
 - Production configuration is environment-driven, and startup rejects weak/default JWT secrets and placeholder production database passwords
+- Public homelab deployment disables open registration, supports a configured demo user, limits auth attempts, and caps demo-account application growth.
 
 ---
 

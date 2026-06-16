@@ -193,6 +193,32 @@ describe("ApplicationsPage update flow", () => {
     expect(companyInput.value).toBe("Acme Labs Updated");
   });
 
+  it("shows the demo cleanup notice after a successful create", async () => {
+    await renderPage(createTestApplication());
+
+    mockedCreateApplication.mockResolvedValue({
+      application: createTestApplication({ id: 99, company: "Acme Labs" }),
+      notice: {
+        code: "demo_application_cleanup",
+        message: "Demo cleanup removed older applications.",
+      },
+    });
+
+    fireEvent.change(screen.getByLabelText("Company"), {
+      target: { value: "Acme Labs" },
+    });
+
+    fireEvent.change(screen.getByLabelText("Job Title"), {
+      target: { value: "Frontend Engineer" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Create application" }));
+
+    expect(
+      await screen.findByText("Demo cleanup removed older applications."),
+    ).toBeTruthy();
+  });
+
   it("disables the create form while create is in flight", async () => {
     await renderPage(createTestApplication());
 
