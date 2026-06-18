@@ -396,29 +396,38 @@ export function ApplicationsPage() {
           No applications found.
         </p>
       ) : (
-        <ul className={styles.applicationList}>
-          {applications.map((application) => (
-            <ApplicationListItem
-              application={application}
-              key={application.id}
-              isEditing={editingApplicationId === application.id}
-              editForm={
-                editingApplicationId === application.id ? editForm : null
-              }
-              isSaving={isSaving}
-              isDeleting={deletingApplicationId === application.id}
-              updateError={
-                editingApplicationId === application.id ? updateError : null
-              }
-              statusOptions={APPLICATION_STATUS_OPTIONS}
-              onStartEdit={handleStartEdit}
-              onCancelEdit={handleCancelEdit}
-              onDelete={handleDeleteApplication}
-              onSubmit={handleUpdateApplication}
-              onEditFormChange={handleEditFormChange}
-            />
-          ))}
-        </ul>
+        <div className={styles.applicationTable}>
+          <div className={styles.applicationTableHeader} aria-hidden="true">
+            <span>Company</span>
+            <span>Job Title</span>
+            <span>Status</span>
+            <span>Applied Date</span>
+            <span>Actions</span>
+          </div>
+          <ul className={styles.applicationList}>
+            {applications.map((application) => (
+              <ApplicationListItem
+                application={application}
+                key={application.id}
+                isEditing={editingApplicationId === application.id}
+                editForm={
+                  editingApplicationId === application.id ? editForm : null
+                }
+                isSaving={isSaving}
+                isDeleting={deletingApplicationId === application.id}
+                updateError={
+                  editingApplicationId === application.id ? updateError : null
+                }
+                statusOptions={APPLICATION_STATUS_OPTIONS}
+                onStartEdit={handleStartEdit}
+                onCancelEdit={handleCancelEdit}
+                onDelete={handleDeleteApplication}
+                onSubmit={handleUpdateApplication}
+                onEditFormChange={handleEditFormChange}
+              />
+            ))}
+          </ul>
+        </div>
       )}
     </div>
   );

@@ -46,26 +46,6 @@ export function ApplicationListItem({
     <li className={`surfacePanel ${styles.applicationItem}`}>
       <div className={styles.applicationItemHeader}>
         <h2>{application.company}</h2>
-        {isEditing ? null : (
-          <>
-            <button
-              type="button"
-              className="secondaryButton"
-              onClick={() => onStartEdit(application)}
-              disabled={isSaving || isDeleting}
-            >
-              Edit
-            </button>
-            <button
-              type="button"
-              className="secondaryButton"
-              onClick={() => void onDelete(application)}
-              disabled={isSaving || isDeleting}
-            >
-              {isDeleting ? "Deleting..." : "Delete"}
-            </button>
-          </>
-        )}
       </div>
 
       {isEditing && editForm ? (
@@ -179,10 +159,12 @@ export function ApplicationListItem({
 
           <div>
             <dt>Status</dt>
-            <dd>{application.status}</dd>
+            <dd>
+              <span className={styles.statusBadge}>{application.status}</span>
+            </dd>
           </div>
           <div>
-            <dt>Applied At</dt>
+            <dt>Applied Date</dt>
             <dd>
               {application.applied_at
                 ? toDateInputValue(application.applied_at)
@@ -190,6 +172,27 @@ export function ApplicationListItem({
             </dd>
           </div>
         </dl>
+      )}
+
+      {isEditing ? null : (
+        <div className={styles.applicationActions}>
+          <button
+            type="button"
+            className={`secondaryButton ${styles.rowActionButton}`}
+            onClick={() => onStartEdit(application)}
+            disabled={isSaving || isDeleting}
+          >
+            Edit
+          </button>
+          <button
+            type="button"
+            className={`secondaryButton ${styles.rowActionButton}`}
+            onClick={() => void onDelete(application)}
+            disabled={isSaving || isDeleting}
+          >
+            {isDeleting ? "Deleting..." : "Delete"}
+          </button>
+        </div>
       )}
     </li>
   );
