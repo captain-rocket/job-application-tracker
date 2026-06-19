@@ -227,13 +227,15 @@ PORT=4000
 PUBLIC_REGISTRATION_ENABLED=false
 PUBLIC_DEMO_USER_EMAIL=
 
-# Optional for public HTTPS deployment:
+# Optional for direct single-VM Caddy HTTPS deployment only:
 # APP_HOST=job.<domain>
 ```
 
 For local VM validation before public DNS and HTTPS are ready, leave `APP_HOST` unset. Compose will pass `:80` to Caddy, and `http://localhost/api/health` should work from the VM.
 
-For public same-origin validation, set `APP_HOST=job.<domain>` in the Compose environment before starting the stack. Then verify through `https://job.<domain>/api/health`. Do not use `http://localhost/api/health` while `APP_HOST` is set to a real hostname, because Caddy matches requests by the configured site host.
+For direct single-VM Caddy public validation, set `APP_HOST=job.<domain>` in the Compose environment before starting the stack. Then verify through `https://job.<domain>/api/health`. Do not use `http://localhost/api/health` while `APP_HOST` is set to a real hostname, because Caddy matches requests by the configured site host.
+
+For external Traefik mode, leave `APP_HOST` unset/defaulted. Traefik on `192.168.91.20` terminates public HTTP/HTTPS for `portfolio.fromstudiob.com` and should proxy to `http://192.168.91.12:8080`. That internal listener is still the Caddy web service: it serves the React frontend, strips `/api`, proxies internally to `api:4000`, and leaves the API and PostgreSQL services unexposed to the host network.
 
 The API uses `DB_USER` and `DB_PASSWORD` at runtime. During the first `docker compose up`, PostgreSQL uses `POSTGRES_USER` and `POSTGRES_PASSWORD` to initialize the database, and it also reads `DB_USER` and `DB_PASSWORD` once to create the lower-privilege application role. Changing any of those values later does not repair an already-initialized volume automatically.
 
@@ -275,6 +277,12 @@ When `APP_HOST=job.<domain>` is set and DNS/firewall routing point at the VM, ve
 
 ```bash
 curl https://job.<domain>/api/health
+```
+
+For external Traefik mode, validate the internal upstream:
+
+```bash
+curl -i http://192.168.91.12:8080/api/health
 ```
 
 Check PostgreSQL readiness from inside the database container:

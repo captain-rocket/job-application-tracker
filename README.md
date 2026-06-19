@@ -357,7 +357,8 @@ An additional self-hosted deployment target is available for a single VM using D
 - API container on the VM, exposed only to the Compose network
 - PostgreSQL container on the same VM, kept internal to the Compose network
 - Persistent PostgreSQL and Caddy data volumes
-- Public ingress only through the Caddy web service on ports 80 and 443
+- Direct single-VM mode can use Caddy public ingress on ports 80 and 443
+- External Traefik on `192.168.91.20` can terminate public traffic for `portfolio.fromstudiob.com` and use `http://192.168.91.12:8080` as the upstream
 - First boot initializes schema only, with no demo accounts or seed data
 
 Setup from the repository root:
@@ -376,7 +377,9 @@ The Postgres container now fails before volume initialization if `DB_PASSWORD` o
 
 For local VM validation before public DNS and HTTPS are ready, leave `APP_HOST` unset. Compose will pass `:80` to Caddy, and `http://localhost/api/health` should work from the VM.
 
-For public same-origin validation, set `APP_HOST=job.<domain>` in the Compose environment before starting the stack. Then verify through `https://job.<domain>/api/health`. Do not use `http://localhost/api/health` while `APP_HOST` is set to a real hostname, because Caddy matches requests by the configured site host.
+For direct single-VM Caddy public validation, set `APP_HOST=job.<domain>` in the Compose environment before starting the stack. Then verify through `https://job.<domain>/api/health`. Do not use `http://localhost/api/health` while `APP_HOST` is set to a real hostname, because Caddy matches requests by the configured site host.
+
+For external Traefik mode, leave `APP_HOST` unset/defaulted. Traefik terminates public HTTP/HTTPS for `portfolio.fromstudiob.com` and should proxy to `http://192.168.91.12:8080`. That internal listener is still the Caddy web service: it serves the React frontend, strips `/api`, proxies internally to `api:4000`, and leaves the API and PostgreSQL services unexposed to the host network.
 
 The homelab `docker compose` commands below use `--env-file backend/.env.homelab` so Compose can interpolate values from that file across `docker-compose.homelab.yml`. What each container actually receives is still controlled by its explicit `environment:` block: the `db` service gets the init credentials it needs, and the `api` service gets only its runtime app settings.
 
@@ -396,6 +399,12 @@ Use the `localhost` health check only when `APP_HOST` is unset. With `APP_HOST=j
 
 ```bash
 curl https://job.<domain>/api/health
+```
+
+For external Traefik mode, validate the internal upstream:
+
+```bash
+curl -i http://192.168.91.12:8080/api/health
 ```
 
 Fresh home lab installs do not create an admin user automatically. See `backend/DEPLOYMENT.md` for the one-time admin bootstrap step after registering your first account.
