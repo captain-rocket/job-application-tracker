@@ -10,9 +10,15 @@ import {
 import {
   getMe,
   login as loginRequest,
+  loginDemo as loginDemoRequest,
   setUnauthorizedHandler,
 } from "../api/client";
-import { LoginRequestBody, MeResponse, User } from "../types/api";
+import {
+  LoginRequestBody,
+  LoginResponse,
+  MeResponse,
+  User,
+} from "../types/api";
 
 const AUTH_TOKEN_STORAGE_KEY = "job-tracker-token";
 
@@ -22,6 +28,7 @@ type AuthContextValue = {
   isHydrating: boolean;
   authMessage: string | null;
   login: (credentials: LoginRequestBody) => Promise<void>;
+  loginDemo: () => Promise<void>;
   logout: () => void;
 };
 
@@ -92,14 +99,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [clearAuth]);
 
-  const login = useCallback(async (credentials: LoginRequestBody) => {
-    const response = await loginRequest(credentials);
-
+  const storeLoginResponse = useCallback((response: LoginResponse) => {
     localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, response.token);
     setToken(response.token);
     setUser(toUser(response.user));
     setAuthMessage(null);
   }, []);
+
+  const login = useCallback(
+    async (credentials: LoginRequestBody) => {
+      const response = await loginRequest(credentials);
+      storeLoginResponse(response);
+    },
+    [storeLoginResponse],
+  );
+
+  const loginDemo = useCallback(async () => {
+    const response = await loginDemoRequest();
+    storeLoginResponse(response);
+  }, [storeLoginResponse]);
 
   const logout = useCallback(() => {
     clearAuth();
@@ -113,9 +131,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isHydrating,
       authMessage,
       login,
+      loginDemo,
       logout,
     }),
-    [isHydrating, authMessage, login, logout, token, user],
+    [isHydrating, authMessage, login, loginDemo, logout, token, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

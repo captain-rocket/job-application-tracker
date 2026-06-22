@@ -15,6 +15,7 @@ import {
   getMe,
   listApplications,
   login,
+  loginDemo,
   setUnauthorizedHandler,
   updateApplication,
 } from "../api/client";
@@ -40,6 +41,7 @@ vi.mock("../api/client", () => ({
   getMe: vi.fn(),
   listApplications: vi.fn(),
   login: vi.fn(),
+  loginDemo: vi.fn(),
   setUnauthorizedHandler: vi.fn(),
   updateApplication: vi.fn(),
 }));
@@ -51,6 +53,7 @@ const mockedDeleteApplication = vi.mocked(deleteApplication);
 const mockedGetMe = vi.mocked(getMe);
 const mockedListApplications = vi.mocked(listApplications);
 const mockedLogin = vi.mocked(login);
+const mockedLoginDemo = vi.mocked(loginDemo);
 const mockedSetUnauthorizedHandler = vi.mocked(setUnauthorizedHandler);
 const mockedUpdateApplication = vi.mocked(updateApplication);
 
@@ -68,6 +71,7 @@ function createTestApplication(
     location: null,
     notes: null,
     applied_at: "2026-05-12T12:00:00.000Z",
+    is_demo_seed: false,
     created_at: "2026-05-10T12:00:00.000Z",
     updated_at: "2026-05-10T12:00:00.000Z",
     ...overrides,
@@ -218,6 +222,14 @@ describe("App auth and routing", () => {
 
     expect(mockedGetMe).not.toHaveBeenCalled();
     expect(mockedListApplications).not.toHaveBeenCalled();
+  });
+
+  it("renders the demo account login button", async () => {
+    renderApp("/login");
+
+    expect(
+      await screen.findByRole("button", { name: "Use Demo Account" }),
+    ).toBeTruthy();
   });
 
   it("redirects authenticated root route visits to the applications", async () => {
@@ -428,6 +440,37 @@ describe("App auth and routing", () => {
       );
     });
 
+    expect(
+      await screen.findByRole("heading", {
+        name: "Applications",
+        level: 1,
+      }),
+    ).toBeTruthy();
+  });
+
+  it("stores the token and redirects after successful demo login", async () => {
+    mockedLoginDemo.mockResolvedValue({
+      user: {
+        id: "demo-user-123",
+        email: "demo@example.com",
+        role: "user",
+      },
+      token: "demo-token-123",
+    });
+
+    renderApp("/login");
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Use Demo Account" }),
+    );
+
+    await waitFor(() => {
+      expect(localStorage.getItem(AUTH_TOKEN_STORAGE_KEY)).toBe(
+        "demo-token-123",
+      );
+    });
+
+    expect(mockedLoginDemo).toHaveBeenCalledTimes(1);
     expect(
       await screen.findByRole("heading", {
         name: "Applications",

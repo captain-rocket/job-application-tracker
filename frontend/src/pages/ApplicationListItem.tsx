@@ -3,6 +3,11 @@ import { toDateInputValue } from "../utils/applicationDate";
 import { Application, ApplicationStatus } from "../types/api";
 import styles from "./ApplicationsPage.module.css";
 
+const PROTECTED_SAMPLE_HELP =
+  "Protected sample records cannot be edited or deleted. Create a new application to test editing and deletion.";
+const PROTECTED_SAMPLE_VISIBLE_HELP =
+  "Protected sample records are read-only. Create a new application to test editing and deletion.";
+
 export type EditFormState = {
   company: string;
   jobTitle: string;
@@ -42,10 +47,27 @@ export function ApplicationListItem({
   onSubmit,
   onEditFormChange,
 }: ApplicationListItemProps) {
+  const canModifyApplication = !application.is_demo_seed;
+
   return (
     <li className={`surfacePanel ${styles.applicationItem}`}>
       <div className={styles.applicationItemHeader}>
-        <h2>{application.company}</h2>
+        <div className={styles.companyCell}>
+          <h2>{application.company}</h2>
+          {application.is_demo_seed ? (
+            <>
+              <span
+                className={styles.protectedBadge}
+                title={PROTECTED_SAMPLE_HELP}
+              >
+                Protected sample
+              </span>
+              <p className={styles.protectedHint}>
+                {PROTECTED_SAMPLE_VISIBLE_HELP}
+              </p>
+            </>
+          ) : null}
+        </div>
       </div>
 
       {isEditing && editForm ? (
@@ -180,7 +202,8 @@ export function ApplicationListItem({
             type="button"
             className={`secondaryButton ${styles.rowActionButton}`}
             onClick={() => onStartEdit(application)}
-            disabled={isSaving || isDeleting}
+            disabled={isSaving || isDeleting || !canModifyApplication}
+            title={canModifyApplication ? undefined : PROTECTED_SAMPLE_HELP}
           >
             Edit
           </button>
@@ -188,7 +211,8 @@ export function ApplicationListItem({
             type="button"
             className={`secondaryButton ${styles.rowActionButton}`}
             onClick={() => void onDelete(application)}
-            disabled={isSaving || isDeleting}
+            disabled={isSaving || isDeleting || !canModifyApplication}
+            title={canModifyApplication ? undefined : PROTECTED_SAMPLE_HELP}
           >
             {isDeleting ? "Deleting..." : "Delete"}
           </button>

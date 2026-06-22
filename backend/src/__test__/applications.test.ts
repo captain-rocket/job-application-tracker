@@ -5,20 +5,6 @@ import {
 } from "./testUtils";
 
 describe("Application routes", () => {
-  const originalPublicDemoUserEmail = process.env.PUBLIC_DEMO_USER_EMAIL;
-
-  beforeEach(() => {
-    delete process.env.PUBLIC_DEMO_USER_EMAIL;
-  });
-
-  afterEach(() => {
-    if (originalPublicDemoUserEmail === undefined) {
-      delete process.env.PUBLIC_DEMO_USER_EMAIL;
-    } else {
-      process.env.PUBLIC_DEMO_USER_EMAIL = originalPublicDemoUserEmail;
-    }
-  });
-
   test("GET /applications returns 401 when unauthenticated", async () => {
     const app = createAppExpectNoDbCalls("input.invalid");
 
@@ -496,9 +482,7 @@ describe("Application routes", () => {
     });
   });
 
-  test("POST /applications cleans up only the public demo user's application when cap is exceeded", async () => {
-    process.env.PUBLIC_DEMO_USER_EMAIL = "demo@example.com";
-
+  test("POST /applications creates a throwaway application for the demo user", async () => {
     let queryCount = 0;
     const app = createTestAppWithDb(async (sql, params) => {
       queryCount += 1;
@@ -515,11 +499,10 @@ describe("Application routes", () => {
           null,
           "2026-03-12T12:00:00.000Z",
         ]);
-
         return {
           rows: [
             {
-              id: 11,
+              id: 1,
               company: "Tech Corp",
               job_title: "Software Engineer",
               status: "saved",
@@ -527,6 +510,7 @@ describe("Application routes", () => {
               location: null,
               notes: null,
               applied_at: "2026-03-12T12:00:00.000Z",
+              is_demo_seed: false,
               created_at: "2026-03-12T12:00:00.000Z",
               updated_at: "2026-03-12T12:00:00.000Z",
             },
@@ -535,24 +519,7 @@ describe("Application routes", () => {
         };
       }
 
-      if (q.includes("from users") && q.includes("lower(email) = $2")) {
-        expect(params).toEqual(["demo-user", "demo@example.com"]);
-        return { rows: [{ id: "demo-user" }], rowCount: 1 };
-      }
-
-      if (q.includes("select count(*)::int as total from applications")) {
-        expect(params).toEqual(["demo-user"]);
-        return { rows: [{ total: 11 }], rowCount: 1 };
-      }
-
-      if (q.includes("delete from applications")) {
-        expect(q).toContain("where user_id = $1");
-        expect(q).toContain("limit $2");
-        expect(params).toEqual(["demo-user", 3]);
-        return { rows: [], rowCount: 8 };
-      }
-
-      throw new Error(`Unexpected SQL in demo cleanup test: ${sql}`);
+      throw new Error(`Unexpected SQL in non-demo create test: ${sql}`);
     });
 
     const res = await makeTestRequest({
@@ -567,67 +534,10 @@ describe("Application routes", () => {
         applied_at: "2026-03-12T12:00:00.000Z",
       },
     });
-    expect(queryCount).toBe(4);
+
+    expect(queryCount).toBe(1);
     expect(res.status).toBe(201);
-    expect(res.body.notice).toEqual({
-      code: "demo_application_cleanup",
-      message:
-        "Demo account cleanup ran after reaching 10 applications. Kept the newest 3 applications and removed 8 older demo applications.",
-    });
-  });
-
-  test("POST /applications does not clean up for non-demo users", async () => {
-    process.env.PUBLIC_DEMO_USER_EMAIL = "demo@example.com";
-
-    let queryCount = 0;
-    const app = createTestAppWithDb(async (sql, params) => {
-      queryCount += 1;
-      const q = sql.toLowerCase().replace(/\s+/g, " ").trim();
-
-      if (q.includes("insert into applications")) {
-        return {
-          rows: [
-            {
-              id: 1,
-              company: "Tech Corp",
-              job_title: "Software Engineer",
-              status: "saved",
-              job_url: null,
-              location: null,
-              notes: null,
-              applied_at: "2026-03-12T12:00:00.000Z",
-              created_at: "2026-03-12T12:00:00.000Z",
-              updated_at: "2026-03-12T12:00:00.000Z",
-            },
-          ],
-          rowCount: 1,
-        };
-      }
-
-      if (q.includes("from user") && q.includes("lower(email) = $2")) {
-        expect(params).toEqual(["user-123", "demo@example.com"]);
-        return { rows: [], rowCount: 0 };
-      }
-
-      throw new Error(`Unexpected SQL in non-demo create test: ${sql}`);
-    });
-
-    const res = await makeTestRequest({
-      app,
-      method: "post",
-      path: "/applications",
-      auth: { sub: "user-123", role: "user" },
-      body: {
-        company: "Tech Corp",
-        job_title: "Software Engineer",
-        status: "saved",
-        applied_at: "2026-03-12T12:00:00.000Z",
-      },
-    });
-
-    expect(queryCount).toBe(2);
-    expect(res.status).toBe(201);
-    expect(res.body.notice).toBeUndefined();
+    expect(res.body.application.is_demo_seed).toBe(false);
   });
 
   test("POST /applications returns 401 when unauthenticated", async () => {
@@ -836,10 +746,25 @@ describe("Application routes", () => {
   });
 
   test("PATCH /applications/:id returns 404 when application does not exist for user", async () => {
+    let callCount = 0;
     const app = createTestAppWithDb(async (sql, params) => {
-      expect(sql.toLowerCase()).toContain("update applications");
-      expect(sql.toLowerCase()).toContain("where id = $2 and user_id = $3");
-      expect(params).toEqual(["interviewing", 1, "user-123"]);
+      callCount += 1;
+
+      if (callCount === 1) {
+        expect(sql.toLowerCase()).toContain("update applications");
+        expect(sql.toLowerCase()).toContain("where id = $2 and user_id = $3");
+        expect(sql.toLowerCase()).toContain("is_demo_seed = false");
+        expect(params).toEqual(["interviewing", 1, "user-123"]);
+
+        return {
+          rows: [],
+          rowCount: 0,
+        };
+      }
+
+      expect(sql.toLowerCase()).toContain("select id, is_demo_seed");
+      expect(sql.toLowerCase()).toContain("where id = $1 and user_id = $2");
+      expect(params).toEqual([1, "user-123"]);
 
       return {
         rows: [],
@@ -856,8 +781,46 @@ describe("Application routes", () => {
       },
     });
 
+    expect(callCount).toBe(2);
     expect(res.status).toBe(404);
     expect(res.body).toEqual({ error: "Application not found" });
+  });
+
+  test("PATCH /applications/:id returns 403 for protected demo seed records", async () => {
+    let callCount = 0;
+    const app = createTestAppWithDb(async (sql, params) => {
+      callCount += 1;
+
+      if (callCount === 1) {
+        expect(sql.toLowerCase()).toContain("update applications");
+        expect(sql.toLowerCase()).toContain("is_demo_seed = false");
+        expect(params).toEqual(["interviewing", 1, "demo-user"]);
+        return { rows: [], rowCount: 0 };
+      }
+
+      expect(sql.toLowerCase()).toContain("select id, is_demo_seed");
+      expect(params).toEqual([1, "demo-user"]);
+      return {
+        rows: [{ id: 1, is_demo_seed: true }],
+        rowCount: 1,
+      };
+    });
+
+    const res = await makeTestRequest({
+      app,
+      method: "patch",
+      path: "/applications/1",
+      auth: { sub: "demo-user", role: "user" },
+      body: {
+        status: "interviewing",
+      },
+    });
+
+    expect(callCount).toBe(2);
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({
+      error: "Protected demo seed applications cannot be edited",
+    });
   });
 
   test("PATCH /applications/:id updates application for authenticated user", async () => {
@@ -983,6 +946,52 @@ describe("Application routes", () => {
     });
   });
 
+  test("PATCH /applications/:id updates demo-created throwaway records", async () => {
+    const app = createTestAppWithDb(async (sql, params) => {
+      expect(sql.toLowerCase()).toContain("update applications");
+      expect(sql.toLowerCase()).toContain("is_demo_seed = false");
+      expect(sql.toLowerCase()).toContain("where id = $2 and user_id = $3");
+      expect(params).toEqual(["offer", 1, "demo-user"]);
+
+      return {
+        rows: [
+          {
+            id: 1,
+            company: "Throwaway Corp",
+            job_title: "Software Engineer",
+            status: "offer",
+            job_url: null,
+            location: null,
+            notes: null,
+            applied_at: null,
+            is_demo_seed: false,
+            created_at: "2026-06-21T12:00:00.000Z",
+            updated_at: "2026-06-22T12:00:00.000Z",
+          },
+        ],
+        rowCount: 1,
+      };
+    });
+
+    const res = await makeTestRequest({
+      app,
+      method: "patch",
+      path: "/applications/1",
+      auth: { sub: "demo-user", role: "user" },
+      body: {
+        status: "offer",
+      },
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body.application).toMatchObject({
+      id: 1,
+      company: "Throwaway Corp",
+      status: "offer",
+      is_demo_seed: false,
+    });
+  });
+
   test("DELETE /applications/:id returns 401 when unauthenticated", async () => {
     const app = createAppExpectNoDbCalls("input.invalid");
 
@@ -1012,8 +1021,23 @@ describe("Application routes", () => {
   });
 
   test("DELETE /applications/:id returns 404 when application does not exist for user", async () => {
+    let callCount = 0;
     const app = createTestAppWithDb(async (sql, params) => {
-      expect(sql.toLowerCase()).toContain("delete from applications");
+      callCount += 1;
+
+      if (callCount === 1) {
+        expect(sql.toLowerCase()).toContain("delete from applications");
+        expect(sql.toLowerCase()).toContain("where id = $1 and user_id = $2");
+        expect(sql.toLowerCase()).toContain("is_demo_seed = false");
+        expect(params).toEqual([1, "user-123"]);
+
+        return {
+          rows: [],
+          rowCount: 0,
+        };
+      }
+
+      expect(sql.toLowerCase()).toContain("select id, is_demo_seed");
       expect(sql.toLowerCase()).toContain("where id = $1 and user_id = $2");
       expect(params).toEqual([1, "user-123"]);
 
@@ -1029,8 +1053,43 @@ describe("Application routes", () => {
       auth: { sub: "user-123", role: "user" },
     });
 
+    expect(callCount).toBe(2);
     expect(res.status).toBe(404);
     expect(res.body).toEqual({ error: "Application not found" });
+  });
+
+  test("DELETE /applications/:id returns 403 for protected demo seed records", async () => {
+    let callCount = 0;
+    const app = createTestAppWithDb(async (sql, params) => {
+      callCount += 1;
+
+      if (callCount === 1) {
+        expect(sql.toLowerCase()).toContain("delete from applications");
+        expect(sql.toLowerCase()).toContain("is_demo_seed = false");
+        expect(params).toEqual([1, "demo-user"]);
+        return { rows: [], rowCount: 0 };
+      }
+
+      expect(sql.toLowerCase()).toContain("select id, is_demo_seed");
+      expect(params).toEqual([1, "demo-user"]);
+      return {
+        rows: [{ id: 1, is_demo_seed: true }],
+        rowCount: 1,
+      };
+    });
+
+    const res = await makeTestRequest({
+      app,
+      method: "delete",
+      path: "/applications/1",
+      auth: { sub: "demo-user", role: "user" },
+    });
+
+    expect(callCount).toBe(2);
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({
+      error: "Protected demo seed applications cannot be deleted",
+    });
   });
 
   test("DELETE /applications/:id deletes application for authenticated user", async () => {
@@ -1050,6 +1109,30 @@ describe("Application routes", () => {
       method: "delete",
       path: "/applications/1",
       auth: { sub: "user-123", role: "user" },
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ message: "Application deleted" });
+  });
+
+  test("DELETE /applications/:id deletes demo-created throwaway records", async () => {
+    const app = createTestAppWithDb(async (sql, params) => {
+      expect(sql.toLowerCase()).toContain("delete from applications");
+      expect(sql.toLowerCase()).toContain("where id = $1 and user_id = $2");
+      expect(sql.toLowerCase()).toContain("is_demo_seed = false");
+      expect(params).toEqual([1, "demo-user"]);
+
+      return {
+        rows: [{ id: 1 }],
+        rowCount: 1,
+      };
+    });
+
+    const res = await makeTestRequest({
+      app,
+      method: "delete",
+      path: "/applications/1",
+      auth: { sub: "demo-user", role: "user" },
     });
 
     expect(res.status).toBe(200);

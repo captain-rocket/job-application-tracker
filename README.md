@@ -2,6 +2,10 @@
 
 A full-stack job application tracker with a deployed backend API, local React frontend, and home lab same-origin frontend deployment path.
 
+Live demo: <https://portfolio.fromstudiob.com/>
+
+Demo access is available from the login screen using the **Use Demo Account** button. Demo data includes protected seeded records for a stable walkthrough, and demo-created throwaway records may be cleaned up after 24 hours. Do not publish private credentials.
+
 Current status:
 
 - Backend API is deployed on AWS EC2 with PostgreSQL on AWS RDS
@@ -155,6 +159,7 @@ job-application-tracker/
 ├── db
 │   ├── init.homelab.sql
 │   ├── init.sql
+│   ├── migrations
 │   └── preflight.homelab.sh
 ├── deployment
 │   └── Caddyfile.homelab
@@ -238,11 +243,14 @@ CREATE TABLE applications (
   notes TEXT,
 
   applied_at TIMESTAMPTZ,
+  is_demo_seed BOOLEAN NOT NULL DEFAULT false,
 
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW (),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW ()
 );
 ```
+
+Existing databases created before the public demo safety slice need the one-off schema update in `db/migrations/20260622_add_demo_seed_flag_to_applications.sql`.
 
 ---
 
@@ -492,6 +500,10 @@ POST /auth/login
 
 Authenticates a user and returns a JWT token.
 
+POST /auth/demo-login
+
+Authenticates the configured public demo user, restores protected demo seed records, removes demo throwaway records older than 24 hours, and returns a JWT token.
+
 ---
 
 Authenticated routes
@@ -572,7 +584,7 @@ Returns a list of users.
 - The frontend stores the JWT in `localStorage` and hydrates the session on page load
 - The `/applications` frontend route is protected by client-side auth state
 - Production configuration is environment-driven, and startup rejects weak/default JWT secrets and placeholder production database passwords
-- Public homelab deployment disables open registration, supports a configured demo user, limits auth attempts, and caps demo-account application growth.
+- Public homelab deployment disables open registration, supports a configured demo user, limits auth attempts, protects demo seed records from edit/delete, prepares demo data when the public demo account signs in, and removes demo throwaway records older than 24 hours.
 
 ---
 

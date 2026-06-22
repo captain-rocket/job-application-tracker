@@ -91,6 +91,13 @@ export function login(body: LoginRequestBody) {
   });
 }
 
+export function loginDemo() {
+  return request<LoginResponse>("/api/auth/demo-login", {
+    method: "POST",
+    handleUnauthorized: false,
+  });
+}
+
 export function getMe(token: string) {
   return request<MeResponse>("/api/auth/me", { token });
 }

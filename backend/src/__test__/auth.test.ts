@@ -11,9 +11,11 @@ import request from "supertest";
 describe("Auth routes", () => {
   const originalPublicRegistrationEnabled =
     process.env.PUBLIC_REGISTRATION_ENABLED;
+  const originalPublicDemoUserEmail = process.env.PUBLIC_DEMO_USER_EMAIL;
 
   beforeEach(() => {
     delete process.env.PUBLIC_REGISTRATION_ENABLED;
+    delete process.env.PUBLIC_DEMO_USER_EMAIL;
     resetAuthRateLimitForTests();
   });
 
@@ -24,6 +26,11 @@ describe("Auth routes", () => {
     } else {
       process.env.PUBLIC_REGISTRATION_ENABLED =
         originalPublicRegistrationEnabled;
+    }
+    if (originalPublicDemoUserEmail === undefined) {
+      delete process.env.PUBLIC_DEMO_USER_EMAIL;
+    } else {
+      process.env.PUBLIC_DEMO_USER_EMAIL = originalPublicDemoUserEmail;
     }
   });
 
@@ -175,6 +182,216 @@ describe("Auth routes", () => {
       role: "user",
     });
     expect(typeof res.body.token).toBe("string");
+  });
+
+  test("POST /auth/login prepares demo data for the configured demo user", async () => {
+    process.env.PUBLIC_DEMO_USER_EMAIL = "demo@example.com";
+    const hash = await bcrypt.hash("password123", 10);
+
+    const queryNames: string[] = [];
+    const app = createTestAppWithDb(async (sql, params) => {
+      const q = sql.toLowerCase().replace(/\s+/g, " ").trim();
+
+      if (q.includes("from users") && q.includes("where email = $1")) {
+        queryNames.push("find-login-user");
+        expect(params).toEqual(["demo@example.com"]);
+        return {
+          rows: [
+            {
+              id: "demo-user",
+              email: "demo@example.com",
+              password_hash: hash,
+              role: "user",
+            },
+          ],
+          rowCount: 1,
+        };
+      }
+
+      if (
+        q.includes("delete from applications") &&
+        q.includes("is_demo_seed = false") &&
+        q.includes("interval '24 hours'")
+      ) {
+        queryNames.push("cleanup-expired-throwaway");
+        expect(params).toEqual(["demo-user"]);
+        return { rows: [], rowCount: 1 };
+      }
+
+      if (q.includes("removed_demo_seed_applications")) {
+        queryNames.push("reset-protected-seeds");
+        expect(q).toContain("is_demo_seed = true");
+        expect(q).toContain("insert into applications");
+        expect(params?.[0]).toBe("demo-user");
+        return { rows: [], rowCount: 3 };
+      }
+
+      throw new Error(`Unexpected SQL in normal demo login test: ${sql}`);
+    });
+
+    const res = await makeTestRequest({
+      app,
+      method: "post",
+      path: "/auth/login",
+      body: { email: "demo@example.com", password: "password123" },
+    });
+
+    expect(queryNames).toEqual([
+      "find-login-user",
+      "cleanup-expired-throwaway",
+      "reset-protected-seeds",
+    ]);
+    expect(res.status).toBe(200);
+    expect(res.body.user).toEqual({
+      id: "demo-user",
+      email: "demo@example.com",
+      role: "user",
+    });
+  });
+
+  test("POST /auth/login does not prepare demo data for non-demo users", async () => {
+    process.env.PUBLIC_DEMO_USER_EMAIL = "demo@example.com";
+    const hash = await bcrypt.hash("password123", 10);
+
+    let queryCount = 0;
+    const app = createTestAppWithDb(async (sql, params) => {
+      queryCount += 1;
+      const q = sql.toLowerCase();
+
+      if (q.includes("from users") && q.includes("where email = $1")) {
+        expect(params).toEqual(["me@example.com"]);
+        return {
+          rows: [
+            {
+              id: "user-1",
+              email: "me@example.com",
+              password_hash: hash,
+              role: "user",
+            },
+          ],
+          rowCount: 1,
+        };
+      }
+
+      throw new Error(`Unexpected SQL in non-demo login test: ${sql}`);
+    });
+
+    const res = await makeTestRequest({
+      app,
+      method: "post",
+      path: "/auth/login",
+      body: { email: "me@example.com", password: "password123" },
+    });
+
+    expect(queryCount).toBe(1);
+    expect(res.status).toBe(200);
+    expect(res.body.user).toEqual({
+      id: "user-1",
+      email: "me@example.com",
+      role: "user",
+    });
+  });
+
+  test("POST /auth/demo-login prepares demo data and returns token", async () => {
+    process.env.PUBLIC_DEMO_USER_EMAIL = "Demo@Example.com";
+
+    const queryNames: string[] = [];
+    const app = createTestAppWithDb(async (sql, params) => {
+      const q = sql.toLowerCase().replace(/\s+/g, " ").trim();
+
+      if (q.includes("from users") && q.includes("lower(email) = $1")) {
+        queryNames.push("find-demo-user");
+        expect(params).toEqual(["demo@example.com"]);
+        return {
+          rows: [
+            {
+              id: "demo-user",
+              email: "demo@example.com",
+              role: "user",
+            },
+          ],
+          rowCount: 1,
+        };
+      }
+
+      if (
+        q.includes("delete from applications") &&
+        q.includes("is_demo_seed = false") &&
+        q.includes("interval '24 hours'")
+      ) {
+        queryNames.push("cleanup-expired-throwaway");
+        expect(params).toEqual(["demo-user"]);
+        return { rows: [], rowCount: 2 };
+      }
+
+      if (q.includes("removed_demo_seed_applications")) {
+        queryNames.push("reset-protected-seeds");
+        expect(q).toContain("is_demo_seed = true");
+        expect(q).toContain("insert into applications");
+        expect(params?.[0]).toBe("demo-user");
+        return { rows: [], rowCount: 3 };
+      }
+
+      throw new Error(`Unexpected SQL in demo login test: ${sql}`);
+    });
+
+    const res = await makeTestRequest({
+      app,
+      method: "post",
+      path: "/auth/demo-login",
+    });
+
+    expect(queryNames).toEqual([
+      "find-demo-user",
+      "cleanup-expired-throwaway",
+      "reset-protected-seeds",
+    ]);
+    expect(res.status).toBe(200);
+    expect(res.body.user).toEqual({
+      id: "demo-user",
+      email: "demo@example.com",
+      role: "user",
+    });
+    expect(typeof res.body.token).toBe("string");
+
+    const decoded = jwt.verify(res.body.token, process.env.JWT_SECRET!) as any;
+    expect(decoded.sub).toBe("demo-user");
+    expect(decoded.role).toBe("user");
+  });
+
+  test("POST /auth/demo-login returns 404 when demo account is not configured", async () => {
+    const app = createAppExpectNoDbCalls("input.invalid");
+
+    const res = await makeTestRequest({
+      app,
+      method: "post",
+      path: "/auth/demo-login",
+    });
+
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ error: "Demo account is not configured" });
+  });
+
+  test("POST /auth/demo-login returns 404 when configured demo user is missing", async () => {
+    process.env.PUBLIC_DEMO_USER_EMAIL = "demo@example.com";
+
+    const app = createTestAppWithDb(async (sql, params) => {
+      const q = sql.toLowerCase().replace(/\s+/g, " ").trim();
+      expect(q).toContain("from users");
+      expect(q).toContain("lower(email) = $1");
+      expect(q).toContain("role = 'user'");
+      expect(params).toEqual(["demo@example.com"]);
+      return { rows: [], rowCount: 0 };
+    });
+
+    const res = await makeTestRequest({
+      app,
+      method: "post",
+      path: "/auth/demo-login",
+    });
+
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ error: "Demo account not found" });
   });
 
   test("POST /auth/login returns 401 for wrong password", async () => {

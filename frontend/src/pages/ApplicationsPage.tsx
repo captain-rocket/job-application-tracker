@@ -66,7 +66,6 @@ export function ApplicationsPage() {
   const [status, setStatus] = useState<ApplicationStatus>("saved");
   const [appliedAt, setAppliedAt] = useState("");
   const [createError, setCreateError] = useState<string | null>(null);
-  const [createNotice, setCreateNotice] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingApplicationId, setEditingApplicationId] = useState<
     number | null
@@ -128,7 +127,6 @@ export function ApplicationsPage() {
     if (!token) return;
 
     setCreateError(null);
-    setCreateNotice(null);
     setIsSubmitting(true);
 
     const body: CreateApplicationRequestBody = {
@@ -139,13 +137,12 @@ export function ApplicationsPage() {
     };
 
     try {
-      const response = await createApplication(token, body);
+      await createApplication(token, body);
 
       setCompany("");
       setJobTitle("");
       setStatus("saved");
       setAppliedAt("");
-      setCreateNotice(response.notice?.message ?? null);
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) return;
 
@@ -298,12 +295,6 @@ export function ApplicationsPage() {
         {createError ? (
           <p role="alert" className="errorMessage">
             {createError}
-          </p>
-        ) : null}
-
-        {createNotice ? (
-          <p role="status" className="statusMessage">
-            {createNotice}
           </p>
         ) : null}
 

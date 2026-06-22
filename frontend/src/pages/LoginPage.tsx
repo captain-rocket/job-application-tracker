@@ -4,12 +4,14 @@ import { useAuth } from "../auth/AuthProvider";
 import styles from "./LoginPage.module.css";
 
 export function LoginPage() {
-  const { user, login, isHydrating, authMessage } = useAuth();
+  const { user, login, loginDemo, isHydrating, authMessage } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDemoSubmitting, setIsDemoSubmitting] = useState(false);
+  const isBusy = isSubmitting || isDemoSubmitting;
 
   if (isHydrating) {
     return (
@@ -38,6 +40,20 @@ export function LoginPage() {
     }
   }
 
+  async function handleDemoLogin() {
+    setError(null);
+    setIsDemoSubmitting(true);
+
+    try {
+      await loginDemo();
+      navigate("/applications", { replace: true });
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Demo login failed");
+    } finally {
+      setIsDemoSubmitting(false);
+    }
+  }
+
   return (
     <div className={`pageShell ${styles.authLayout}`}>
       <div className={`surfacePanel ${styles.authPanel}`}>
@@ -63,6 +79,7 @@ export function LoginPage() {
               autoComplete="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
+              disabled={isBusy}
               required
             />
           </div>
@@ -75,6 +92,7 @@ export function LoginPage() {
               autoComplete="current-password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
+              disabled={isBusy}
               required
             />
           </div>
@@ -82,11 +100,19 @@ export function LoginPage() {
           <button
             type="submit"
             className="primaryButton"
-            disabled={isSubmitting}
+            disabled={isBusy}
           >
             {isSubmitting ? "Signing in..." : "Sign in"}
           </button>
         </form>
+        <button
+          type="button"
+          className={`secondaryButton ${styles.demoButton}`}
+          onClick={() => void handleDemoLogin()}
+          disabled={isBusy}
+        >
+          {isDemoSubmitting ? "Using demo..." : "Use Demo Account"}
+        </button>
       </div>
     </div>
   );

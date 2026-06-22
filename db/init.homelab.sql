@@ -73,6 +73,7 @@ CREATE TABLE applications (
   notes TEXT,
 
   applied_at TIMESTAMPTZ,
+  is_demo_seed BOOLEAN NOT NULL DEFAULT false,
 
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW (),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW ()
@@ -80,6 +81,7 @@ CREATE TABLE applications (
 
 CREATE INDEX idx_applications_user_id_created_at ON applications (user_id, created_at DESC);
 CREATE INDEX idx_applications_user_id_status ON applications (user_id, status);
+CREATE INDEX idx_applications_demo_cleanup ON applications (user_id, is_demo_seed, created_at);
 
 SELECT format('GRANT CONNECT ON DATABASE %I TO %I', current_database(), :'app_user')\gexec
 SELECT format('GRANT USAGE ON SCHEMA public TO %I', :'app_user')\gexec

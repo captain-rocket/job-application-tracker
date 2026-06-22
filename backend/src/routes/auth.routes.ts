@@ -5,6 +5,10 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { authRateLimit, requireAuth, validateBody } from "../middleware";
 import { loginBodySchema, registerBodySchema } from "../schemas/auth.schemas";
+import {
+  prepareAuthenticatedPublicDemoUser,
+  preparePublicDemoAccount,
+} from "../utils/publicDemo";
 
 function signToken(user: { id: string; role: "user" | "admin" }) {
   let jwtSecret: string;
@@ -108,6 +112,8 @@ export function authRoutes(db: Pool) {
         if (!authorized)
           return res.status(401).json({ error: "Invalid credentials" });
 
+        await prepareAuthenticatedPublicDemoUser(db, row);
+
         const token = signToken({ id: row.id, role: row.role });
 
         res.json({
@@ -123,6 +129,38 @@ export function authRoutes(db: Pool) {
       }
     },
   );
+
+  router.post("/auth/demo-login", authRateLimit, async (_req, res, next) => {
+    try {
+      const result = await preparePublicDemoAccount(db);
+
+      if (result.status === "not_configured") {
+        return res
+          .status(404)
+          .json({ error: "Demo account is not configured" });
+      }
+
+      if (result.status === "not_found") {
+        return res.status(404).json({ error: "Demo account not found" });
+      }
+
+      const token = signToken({
+        id: result.user.id,
+        role: result.user.role,
+      });
+
+      res.json({
+        user: {
+          id: result.user.id,
+          email: result.user.email,
+          role: result.user.role,
+        },
+        token,
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
 
   router.get("/auth/me", requireAuth, async (req, res, next) => {
     try {

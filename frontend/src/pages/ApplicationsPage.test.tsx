@@ -62,6 +62,7 @@ function createTestApplication(
     location: null,
     notes: null,
     applied_at: "2026-04-12T12:00:00.000Z",
+    is_demo_seed: false,
     created_at: "2026-04-10T12:00:00.000Z",
     updated_at: "2026-04-10T12:00:00.000Z",
     ...overrides,
@@ -117,6 +118,7 @@ describe("ApplicationsPage update flow", () => {
       authMessage: null,
       isHydrating: false,
       login: vi.fn(),
+      loginDemo: vi.fn(),
       logout: mockLogout,
     });
 
@@ -193,30 +195,23 @@ describe("ApplicationsPage update flow", () => {
     expect(companyInput.value).toBe("Acme Labs Updated");
   });
 
-  it("shows the demo cleanup notice after a successful create", async () => {
-    await renderPage(createTestApplication());
+  it("shows protected sample context and disabled actions for demo seed records", async () => {
+    const card = await renderPage(
+      createTestApplication({ is_demo_seed: true }),
+    );
 
-    mockedCreateApplication.mockResolvedValue({
-      application: createTestApplication({ id: 99, company: "Acme Labs" }),
-      notice: {
-        code: "demo_application_cleanup",
-        message: "Demo cleanup removed older applications.",
-      },
-    });
+    const editButton = card.getByRole("button", { name: "Edit" });
+    const deleteButton = card.getByRole("button", { name: "Delete" });
+    const protectedSampleHelp =
+      "Protected sample records cannot be edited or deleted. Create a new application to test editing and deletion.";
+    const visibleProtectedSampleHelp =
+      "Protected sample records are read-only. Create a new application to test editing and deletion.";
 
-    fireEvent.change(screen.getByLabelText("Company"), {
-      target: { value: "Acme Labs" },
-    });
-
-    fireEvent.change(screen.getByLabelText("Job Title"), {
-      target: { value: "Frontend Engineer" },
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: "Create application" }));
-
-    expect(
-      await screen.findByText("Demo cleanup removed older applications."),
-    ).toBeTruthy();
+    expect(card.getByText("Protected sample")).toBeTruthy();
+    expect(card.getByText(visibleProtectedSampleHelp)).toBeTruthy();
+    expect((editButton as HTMLButtonElement).disabled).toBe(true);
+    expect((deleteButton as HTMLButtonElement).disabled).toBe(true);
+    expect(card.getAllByTitle(protectedSampleHelp).length).toBeGreaterThan(0);
   });
 
   it("disables the create form while create is in flight", async () => {
