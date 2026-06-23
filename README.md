@@ -411,6 +411,8 @@ Fresh home lab installs do not create an admin user automatically. See `backend/
 
 See `backend/DEPLOYMENT.md` for the exact home lab deployment and verification commands.
 
+For updates to the already-deployed homelab app, pull the latest `main` on the app VM and rebuild the homelab containers. See `backend/DEPLOYMENT.md`.
+
 ---
 
 ## AWS Deployment

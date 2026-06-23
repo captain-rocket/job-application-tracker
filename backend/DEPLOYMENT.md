@@ -297,6 +297,55 @@ Check recent PostgreSQL logs:
 docker compose --env-file backend/.env.homelab -f docker-compose.homelab.yml logs db --tail 100
 ```
 
+### Updating the Homelab Deployment
+
+Use this procedure after changes are merged to `main` and the homelab app needs to be updated.
+
+Deploy from `main`, not from an unmerged feature branch, unless intentionally testing a branch. Keep `backend/.env.homelab` and any other deployment environment files out of git.
+
+1. SSH into the homelab app VM.
+2. Change into the repository directory.
+3. Confirm the working tree is clean.
+4. Confirm the current branch is `main`.
+5. Pull the latest changes from GitHub.
+6. Rebuild and recreate the app containers.
+7. Run migrations if the change includes a database migration.
+8. Validate the public API and browser behavior.
+
+```bash
+ssh <app-vm>
+cd <repo-path>
+git status
+git checkout main
+git pull origin main
+docker compose --env-file backend/.env.homelab -f docker-compose.homelab.yml up -d --build api web
+docker compose --env-file backend/.env.homelab -f docker-compose.homelab.yml ps
+```
+
+If the change includes a new SQL migration, apply it using the project's documented migration procedure before validating the application.
+
+Validate the public routes:
+
+```bash
+curl -i https://portfolio.fromstudiob.com/
+curl -i https://portfolio.fromstudiob.com/api/health
+```
+
+Validate in the browser:
+
+- **Use Demo Account** works.
+- Protected seed records are visible and read-only.
+- Demo-created records can still be created, edited, and deleted.
+- Registration remains disabled.
+
+Do not expose PostgreSQL, SSH, the Docker daemon, Proxmox, or pfSense publicly. If the deployment fails, inspect container logs before making additional changes:
+
+```bash
+docker compose --env-file backend/.env.homelab -f docker-compose.homelab.yml logs api --tail 100
+docker compose --env-file backend/.env.homelab -f docker-compose.homelab.yml logs web --tail 100
+docker compose --env-file backend/.env.homelab -f docker-compose.homelab.yml logs db --tail 100
+```
+
 ### Bootstrap public demo user
 
 Fresh home lab installs start with no users. Before public DNS, port forwarding, or firewall exposure is enabled:
