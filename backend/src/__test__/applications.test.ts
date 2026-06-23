@@ -5,6 +5,20 @@ import {
 } from "./testUtils";
 
 describe("Application routes", () => {
+  const originalPublicDemoUserEmail = process.env.PUBLIC_DEMO_USER_EMAIL;
+
+  beforeEach(() => {
+    delete process.env.PUBLIC_DEMO_USER_EMAIL;
+  });
+
+  afterEach(() => {
+    if (originalPublicDemoUserEmail === undefined) {
+      delete process.env.PUBLIC_DEMO_USER_EMAIL;
+    } else {
+      process.env.PUBLIC_DEMO_USER_EMAIL = originalPublicDemoUserEmail;
+    }
+  });
+
   test("GET /applications returns 401 when unauthenticated", async () => {
     const app = createAppExpectNoDbCalls("input.invalid");
 
@@ -482,11 +496,29 @@ describe("Application routes", () => {
     });
   });
 
-  test("POST /applications creates a throwaway application for the demo user", async () => {
+  test("POST /applications creates a throwaway application for the demo user under the cap", async () => {
+    process.env.PUBLIC_DEMO_USER_EMAIL = "demo@example.com";
+
     let queryCount = 0;
     const app = createTestAppWithDb(async (sql, params) => {
       queryCount += 1;
       const q = sql.toLowerCase().replace(/\s+/g, " ").trim();
+
+      if (q.includes("from users u") && q.includes("left join applications")) {
+        expect(q).toContain("a.is_demo_seed = false");
+        expect(q).toContain("interval '10 minutes'");
+        expect(params).toEqual(["demo-user", "demo@example.com"]);
+        return {
+          rows: [
+            {
+              id: "demo-user",
+              total_created: 49,
+              recent_created: 4,
+            },
+          ],
+          rowCount: 1,
+        };
+      }
 
       if (q.includes("insert into applications")) {
         expect(params).toEqual([
@@ -519,7 +551,7 @@ describe("Application routes", () => {
         };
       }
 
-      throw new Error(`Unexpected SQL in non-demo create test: ${sql}`);
+      throw new Error(`Unexpected SQL in demo create under cap test: ${sql}`);
     });
 
     const res = await makeTestRequest({
@@ -535,9 +567,165 @@ describe("Application routes", () => {
       },
     });
 
-    expect(queryCount).toBe(1);
+    expect(queryCount).toBe(2);
     expect(res.status).toBe(201);
     expect(res.body.application.is_demo_seed).toBe(false);
+  });
+
+  test("POST /applications blocks demo user when total demo-created cap is reached", async () => {
+    process.env.PUBLIC_DEMO_USER_EMAIL = "demo@example.com";
+
+    const app = createTestAppWithDb(async (sql, params) => {
+      const q = sql.toLowerCase().replace(/\s+/g, " ").trim();
+
+      if (q.includes("from users u") && q.includes("left join applications")) {
+        expect(q).toContain("a.is_demo_seed = false");
+        expect(params).toEqual(["demo-user", "demo@example.com"]);
+        return {
+          rows: [
+            {
+              id: "demo-user",
+              total_created: 50,
+              recent_created: 0,
+            },
+          ],
+          rowCount: 1,
+        };
+      }
+
+      throw new Error(`Unexpected SQL in demo total cap test: ${sql}`);
+    });
+
+    const res = await makeTestRequest({
+      app,
+      method: "post",
+      path: "/applications",
+      auth: { sub: "demo-user", role: "user" },
+      body: {
+        company: "Tech Corp",
+        job_title: "Software Engineer",
+        status: "saved",
+      },
+    });
+
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({
+      error: "Demo account create limit reached.",
+    });
+  });
+
+  test("POST /applications blocks demo user when burst create cap is reached", async () => {
+    process.env.PUBLIC_DEMO_USER_EMAIL = "demo@example.com";
+
+    const app = createTestAppWithDb(async (sql, params) => {
+      const q = sql.toLowerCase().replace(/\s+/g, " ").trim();
+
+      if (q.includes("from users u") && q.includes("left join applications")) {
+        expect(q).toContain("interval '10 minutes'");
+        expect(q).toContain("a.is_demo_seed = false");
+        expect(params).toEqual(["demo-user", "demo@example.com"]);
+        return {
+          rows: [
+            {
+              id: "demo-user",
+              total_created: 10,
+              recent_created: 5,
+            },
+          ],
+          rowCount: 1,
+        };
+      }
+
+      throw new Error(`Unexpected SQL in demo burst cap test: ${sql}`);
+    });
+
+    const res = await makeTestRequest({
+      app,
+      method: "post",
+      path: "/applications",
+      auth: { sub: "demo-user", role: "user" },
+      body: {
+        company: "Tech Corp",
+        job_title: "Software Engineer",
+        status: "saved",
+      },
+    });
+
+    expect(res.status).toBe(429);
+    expect(res.body).toEqual({
+      error: "Please wait before creating more demo records.",
+    });
+  });
+
+  test("POST /applications does not block non-demo users when demo limits are configured", async () => {
+    process.env.PUBLIC_DEMO_USER_EMAIL = "demo@example.com";
+
+    let queryCount = 0;
+    const app = createTestAppWithDb(async (sql, params) => {
+      queryCount += 1;
+      const q = sql.toLowerCase().replace(/\s+/g, " ").trim();
+
+      if (q.includes("from users u") && q.includes("left join applications")) {
+        expect(params).toEqual(["user-123", "demo@example.com"]);
+        return {
+          rows: [],
+          rowCount: 0,
+        };
+      }
+
+      if (q.includes("insert into applications")) {
+        expect(params).toEqual([
+          "user-123",
+          "Tech Corp",
+          "Software Engineer",
+          "saved",
+          null,
+          null,
+          null,
+          null,
+        ]);
+        return {
+          rows: [
+            {
+              id: 1,
+              company: "Tech Corp",
+              job_title: "Software Engineer",
+              status: "saved",
+              job_url: null,
+              location: null,
+              notes: null,
+              applied_at: null,
+              is_demo_seed: false,
+              created_at: "2026-03-12T12:00:00.000Z",
+              updated_at: "2026-03-12T12:00:00.000Z",
+            },
+          ],
+          rowCount: 1,
+        };
+      }
+
+      throw new Error(`Unexpected SQL in non-demo create limit test: ${sql}`);
+    });
+
+    const res = await makeTestRequest({
+      app,
+      method: "post",
+      path: "/applications",
+      auth: { sub: "user-123", role: "user" },
+      body: {
+        company: "Tech Corp",
+        job_title: "Software Engineer",
+        status: "saved",
+      },
+    });
+
+    expect(queryCount).toBe(2);
+    expect(res.status).toBe(201);
+    expect(res.body.application).toMatchObject({
+      id: 1,
+      company: "Tech Corp",
+      is_demo_seed: false,
+    });
   });
 
   test("POST /applications returns 401 when unauthenticated", async () => {
