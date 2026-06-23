@@ -1,3 +1,4 @@
+import { getPublicAccessEnv } from "../config/env";
 import { Router } from "express";
 import { Pool } from "pg";
 import {
@@ -36,6 +37,60 @@ type ApplicationResponseRow = {
 type CreateApplicationResponseBody = {
   application: ApplicationResponseRow;
 };
+
+const DEMO_CREATED_APPLICATION_TOTAL_CAP = 50;
+const DEMO_CREATE_BURST_CAP = 5;
+
+type DemoCreateLimitStatus =
+  | "not_demo_user"
+  | "allowed"
+  | "total_limit_reached"
+  | "burst_limit_reached";
+
+async function getDemoCreateLimitStatus(
+  db: Pool,
+  user: { id: string; role: "user" | "admin" },
+): Promise<DemoCreateLimitStatus> {
+  const { publicDemoUserEmail } = getPublicAccessEnv();
+
+  if (!publicDemoUserEmail || user.role !== "user") return "not_demo_user";
+
+  const result = await db.query(
+    `
+    SELECT
+      u.id,
+      COUNT(a.id) FILTER (WHERE a.is_demo_seed = false)::int AS total_created,
+      COUNT(a.id) FILTER (
+        WHERE a.is_demo_seed = false
+          AND a.created_at >= NOW() - INTERVAL '10 minutes'
+      )::int AS recent_created
+    FROM users u
+    LEFT JOIN applications a ON a.user_id = u.id
+    WHERE u.id = $1
+      AND LOWER(u.email) = $2
+      AND u.role = 'user'
+    GROUP BY u.id
+    `,
+    [user.id, publicDemoUserEmail],
+  );
+
+  if (!result.rows[0]) return "not_demo_user";
+
+  const row = result.rows[0] as {
+    total_created: number;
+    recent_created: number;
+  };
+
+  if (row.total_created >= DEMO_CREATED_APPLICATION_TOTAL_CAP) {
+    return "total_limit_reached";
+  }
+
+  if (row.recent_created >= DEMO_CREATE_BURST_CAP) {
+    return "burst_limit_reached";
+  }
+
+  return "allowed";
+}
 
 export function applicationsRoutes(db: Pool) {
   const router = Router();
@@ -175,6 +230,23 @@ export function applicationsRoutes(db: Pool) {
       const status = providedStatus ?? "saved";
 
       try {
+        const demoCreateLimitStatus = await getDemoCreateLimitStatus(
+          db,
+          req.user!,
+        );
+
+        if (demoCreateLimitStatus === "total_limit_reached") {
+          return res
+            .status(403)
+            .json({ error: "Demo account create limit reached." });
+        }
+
+        if (demoCreateLimitStatus === "burst_limit_reached") {
+          return res
+            .status(429)
+            .json({ error: "Please wait before creating more demo records." });
+        }
+
         const result = await db.query(
           `
           INSERT INTO applications (
